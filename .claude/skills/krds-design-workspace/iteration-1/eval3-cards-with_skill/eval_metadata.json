@@ -1,0 +1,11 @@
+{
+  "eval_id": 3,
+  "eval_name": "eval3-cards-with_skill",
+  "prompt": "src/app/page.tsx의 중심 관광지 카드 목록(현재 Tailwind로 직접 스타일링된 카드)을 KRDS 디자인 시스템에 맞게 다시 스타일링해줘. hubRank 배지랑 카테고리 표시가 KRDS답게 보였으면 좋겠어.",
+  "assertions": [
+    "hub-spot card rank/category labels use krds-react's Badge or Tag component",
+    "no new arbitrary hardcoded hex colors introduced for card styling (uses Tailwind/krds tokens instead)",
+    "npm run build succeeds",
+    "npm run lint passes"
+  ]
+}

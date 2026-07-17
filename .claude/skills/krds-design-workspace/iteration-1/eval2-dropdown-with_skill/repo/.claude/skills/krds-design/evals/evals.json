@@ -1,0 +1,23 @@
+{
+  "skill_name": "krds-design",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "이 TimeShift 프로젝트에 '문의하기' 페이지를 새로 만들어줘. 경로는 /contact. 이름, 이메일, 문의 내용(여러 줄) 입력받고 제출 버튼 누르면 일단 콘솔에 로그만 남기면 돼. KRDS 디자인 시스템에 맞게 만들어줘.",
+      "expected_output": "src/app/contact/page.tsx (or similar) using krds-react TextInput/Textarea/Button components, wrapped in a Client Component, importing named exports from \"krds-react\" (not deep paths), that builds and renders without hydration errors.",
+      "files": []
+    },
+    {
+      "id": 2,
+      "prompt": "src/app/page.tsx에 있는 시/도, 시/군/구 선택 UI 지금 Select 컴포넌트로 되어 있는데, 좀 더 KRDS스러운 느낌으로 Dropdown 컴포넌트로 바꿔줄 수 있어?",
+      "expected_output": "Ideally the assistant explains that krds-react's Dropdown is an action-menu component (not a real form select) and either keeps Select or clearly flags the tradeoff before making a change, rather than silently swapping to Dropdown and breaking the region-picker's value/onChange semantics.",
+      "files": []
+    },
+    {
+      "id": 3,
+      "prompt": "src/app/page.tsx의 중심 관광지 카드 목록(현재 Tailwind로 직접 스타일링된 카드)을 KRDS 디자인 시스템에 맞게 다시 스타일링해줘. hubRank 배지랑 카테고리 표시가 KRDS답게 보였으면 좋겠어.",
+      "expected_output": "Hub-spot cards restyled using krds-react's Badge/Tag component for the rank/category labels, with any remaining custom card container styled using real KRDS token values (colors/spacing) rather than arbitrary Tailwind defaults, and the page still builds/renders.",
+      "files": []
+    }
+  ]
+}

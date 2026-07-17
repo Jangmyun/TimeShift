@@ -1,0 +1,11 @@
+{
+  "eval_id": 2,
+  "eval_name": "eval2-dropdown-with_skill",
+  "prompt": "src/app/page.tsx에 있는 시/도, 시/군/구 선택 UI 지금 Select 컴포넌트로 되어 있는데, 좀 더 KRDS스러운 느낌으로 Dropdown 컴포넌트로 바꿔줄 수 있어?",
+  "assertions": [
+    "region picker retains controlled select semantics (value + onChange to a specific code), whether via Select or a working Dropdown replacement",
+    "SUMMARY.md explains the Select vs Dropdown distinction (that Dropdown is an action-menu, not a form select) before or instead of blindly swapping",
+    "npm run build succeeds",
+    "npm run lint passes"
+  ]
+}

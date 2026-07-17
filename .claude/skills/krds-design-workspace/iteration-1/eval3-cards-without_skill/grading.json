@@ -1,0 +1,24 @@
+{
+  "expectations": [
+    {
+      "text": "hub-spot card rank/category labels use krds-react's Badge or Tag component",
+      "passed": true,
+      "evidence": "page.tsx: '<Badge color=\"primary\" variant=\"filled\" size=\"small\" rounded>{spot.hubRank}위</Badge>' for rank and '<Badge color=\"gray\" variant=\"outline\" size=\"small\">{spot.hubCtgryLclsNm} · {spot.hubCtgryMclsNm}</Badge>' for category, plus the same pattern applied to the related-spot list with color=\"secondary\"; screenshot.png shows rendered rank/category badges across all 30 cards"
+    },
+    {
+      "text": "no new arbitrary hardcoded hex colors introduced for card styling (uses Tailwind/krds tokens instead)",
+      "passed": true,
+      "evidence": "grep for hex color patterns (#xxxxxx) in outputs/src/app/page.tsx returned no matches; card container styling was left on the original Tailwind classes (border-gray-200, border-blue-600, bg-blue-50, text-gray-500) which predate this change and contain no hex literals"
+    },
+    {
+      "text": "npm run build succeeds",
+      "passed": true,
+      "evidence": "Independently re-ran `npm run build` in the run's repo/: '✓ Compiled successfully in 1480ms', clean TypeScript pass, route table generated with no errors"
+    },
+    {
+      "text": "npm run lint passes",
+      "passed": true,
+      "evidence": "Independently re-ran `npm run lint` in the run's repo/: eslint completed with no output (no warnings/errors)"
+    }
+  ]
+}

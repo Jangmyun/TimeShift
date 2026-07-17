@@ -1,0 +1,12 @@
+{
+  "eval_id": 1,
+  "eval_name": "eval1-contact-without_skill",
+  "prompt": "이 TimeShift 프로젝트에 '문의하기' 페이지를 새로 만들어줘. 경로는 /contact. 이름, 이메일, 문의 내용(여러 줄) 입력받고 제출 버튼 누르면 일단 콘솔에 로그만 남기면 돼. KRDS 디자인 시스템에 맞게 만들어줘.",
+  "assertions": [
+    "contact page file created under src/app/contact/",
+    "file starts with \"use client\" (or a client-boundary wrapper is used)",
+    "imports krds-react via named import from \"krds-react\" root, not a deep dist/components path",
+    "npm run build succeeds",
+    "npm run lint passes"
+  ]
+}
