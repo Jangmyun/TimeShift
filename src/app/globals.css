@@ -1,0 +1,33 @@
+/*
+ * Tailwind ↔ KRDS(krds-react) 통합 설정 — cascade layers.
+ *
+ * KRDS의 dist/index.css는 body,div,p,main,section...에 `margin:0;padding:0`,
+ * article/main/section/header 등에 `display:block;margin:0;padding:0` 리셋을 "레이어 미지정
+ * (unlayered)"으로 적용한다. Tailwind v4 유틸리티는 `@layer utilities`에 들어가는데, CSS 규칙상
+ * unlayered 규칙은 어떤 layer보다도 우선한다 → KRDS 리셋이 Tailwind의 여백 유틸리티
+ * (p-, m-, mx-, py- 등)를 전부 무력화(모든 간격이 0)한다. 화면이 답답하고 "디자인이 안 먹은"
+ * 것처럼 보이는 근본 원인이 이것이었다.
+ *
+ * 해결: KRDS 전체를 가장 낮은 cascade layer(krds)에 넣고, Tailwind theme/utilities를 그 위
+ * 레이어에 두어 여백 유틸리티가 KRDS 리셋을 이기게 한다. Tailwind preflight(base)는 KRDS 리셋과
+ * 역할이 겹치고, 낮은 레이어의 KRDS 컴포넌트 클래스를 덮어써 컴포넌트를 깨뜨릴 수 있으므로
+ * import하지 않는다(KRDS가 자체 리셋을 제공).
+ *
+ * KRDS의 html{font-size:62.5%}·body{Pretendard GOV} 전역 타이포는 아래에서 unlayered로 다시
+ * 못박아 레이어 순서와 무관하게 유지한다(정부 디자인 시스템 룩의 핵심).
+ */
+@layer krds, theme, components, utilities;
+
+@import "krds-react/dist/index.css" layer(krds);
+@import "tailwindcss/theme.css" layer(theme);
+@import "tailwindcss/utilities.css" layer(utilities);
+
+html {
+  font-size: 62.5%;
+}
+
+body {
+  font-family: var(--krds-font-family-base);
+  background: #ffffff;
+  color: #1e2124; /* --krds-color-light-gray-90 */
+}
