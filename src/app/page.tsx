@@ -8,6 +8,7 @@ import {
   Spinner,
   CriticalAlert,
   TextInput,
+  ContextualHelp,
 } from "krds-react";
 import { REGIONS } from "@/lib/regions";
 import type { HubSpot } from "@/lib/tourapi/hubSpots";
@@ -539,6 +540,39 @@ export default function Home() {
                 series={congestion.series}
                 recommended={congestion.recommended}
               />
+              {/* F6 — 인센티브 배지 목업(정적). 추천 방문 구간이 있을 때만, 그 구간에
+                  방문 시 제휴 혜택을 준다는 티저를 보여준다. 실제 발급/결제 로직 없음
+                  (PRD Out-of-scope) — ContextualHelp 팝오버로 "시연용"임을 명확히 안내. */}
+              {congestion.recommended && (
+                <div
+                  className="mt-[16px] flex flex-wrap items-center gap-x-[10px] gap-y-[8px] rounded-[10px] p-[14px]"
+                  style={{
+                    backgroundColor: "#f4f5f6" /* --krds-color-light-gray-5 */,
+                    border: "1px solid #e6e8ea" /* --krds-color-light-gray-10 */,
+                  }}
+                >
+                  <Badge variant="filled" color="point" size="small" rounded>
+                    혜택 예정
+                  </Badge>
+                  <span className="text-[14px]" style={{ color: "#1e2124" }}>
+                    이 추천 방문 시기에 맞춰 방문하면 제휴 할인·우선입장 혜택을 드릴
+                    예정이에요.
+                  </span>
+                  <ContextualHelp
+                    label="자세히"
+                    title="제휴 혜택 안내"
+                    position="top"
+                    alignment="right"
+                  >
+                    <p className="text-[14px] leading-relaxed">
+                      현재는 시연용 화면으로, 실제 쿠폰 발급이나 결제 기능은 포함되어
+                      있지 않습니다. 향후 지자체·지역 상점과 제휴하여 혼잡이 낮은 추천
+                      시간대 방문객에게 실제 할인·우선입장 등의 혜택으로 확장할
+                      예정입니다.
+                    </p>
+                  </ContextualHelp>
+                </div>
+              )}
             </div>
           )}
         </div>
