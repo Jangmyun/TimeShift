@@ -143,4 +143,16 @@ Key external dependencies to keep in mind when implementing:
   data may not exist for all `areaCd`/`signguCd` combinations, so any region-facing feature needs a
   "no data yet" fallback state rather than assuming API coverage is uniform nationwide.
 - Because this is a competition demo, public-data API failures should degrade to cached/static JSON
-  fallbacks rather than breaking the flow.
+  fallbacks rather than breaking the flow. This is implemented in `src/lib/tourapi/fallback.ts` +
+  `src/lib/tourapi/fallback/*.json`: a snapshot of 서울 종로구 (`11`/`11110`) — hub list, per-spot
+  congestion series (`hubTatsNm`→series), and per-code related spots (`hubTatsCd`→items). Each
+  `fetch*` helper wraps its `callTourApi` in try/catch and, **only when the upstream call throws**
+  (network/`TourApiError`; an empty result is a legitimate "no data yet" state and is *not* a
+  fallback trigger), returns the cached data. Every helper now returns `source: "live" | "fallback"`
+  which the routes pass through (the client currently ignores it — degradation is silent). Regions
+  other than the snapshot have no fallback and still 502. To add a region, re-capture its snapshot
+  (fetch hub/congestion/related for the new `areaCd`/`signguCd`, apply the same processing —
+  `resolveCongestionName` for congestion, `tAtsCd` filter for related — and write the three JSON
+  files) and register it in `fallback.ts`'s `HUB`/`CONGESTION`/`RELATED` maps. These JSON files load
+  server-side only (client components import *types* from the tourapi libs, so the data is never
+  bundled to the browser).
