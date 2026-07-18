@@ -1,4 +1,5 @@
 import { callTourApi, currentYm, shiftYm } from "./client";
+import { getFallbackHubSpots, type FetchSource } from "./fallback";
 
 export type HubSpot = {
   baseYm: string;
@@ -30,22 +31,29 @@ export async function fetchHubSpots(
   areaCd: string,
   signguCd: string,
   numOfRows = 30,
-): Promise<{ items: HubSpot[]; baseYm: string | null }> {
-  let ym = currentYm();
-  for (let i = 0; i <= MAX_LOOKBACK_MONTHS; i++) {
-    const items = await callTourApi<HubSpot>(
-      ENDPOINT,
-      SERVICE_KEY,
-      "areaBasedList1",
-      { areaCd, signguCd, baseYm: ym, numOfRows, pageNo: 1 },
-    );
-    if (items.length > 0) {
-      const sorted = [...items].sort(
-        (a, b) => Number(a.hubRank) - Number(b.hubRank),
+): Promise<{ items: HubSpot[]; baseYm: string | null; source: FetchSource }> {
+  try {
+    let ym = currentYm();
+    for (let i = 0; i <= MAX_LOOKBACK_MONTHS; i++) {
+      const items = await callTourApi<HubSpot>(
+        ENDPOINT,
+        SERVICE_KEY,
+        "areaBasedList1",
+        { areaCd, signguCd, baseYm: ym, numOfRows, pageNo: 1 },
       );
-      return { items: sorted, baseYm: ym };
+      if (items.length > 0) {
+        const sorted = [...items].sort(
+          (a, b) => Number(a.hubRank) - Number(b.hubRank),
+        );
+        return { items: sorted, baseYm: ym, source: "live" };
+      }
+      ym = shiftYm(ym, -1);
     }
-    ym = shiftYm(ym, -1);
+    return { items: [], baseYm: null, source: "live" };
+  } catch (err) {
+    // API 실패 시 대표 지역은 정적 캐시로 degrade(데모 안정성). 캐시 없으면 원래 에러 전파.
+    const fb = getFallbackHubSpots(areaCd, signguCd);
+    if (fb) return { ...fb, source: "fallback" };
+    throw err;
   }
-  return { items: [], baseYm: null };
 }

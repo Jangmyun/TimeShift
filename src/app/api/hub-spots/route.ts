@@ -21,8 +21,8 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const { items, baseYm } = await fetchHubSpots(areaCd, signguCd);
-    return NextResponse.json({ items, baseYm });
+    const { items, baseYm, source } = await fetchHubSpots(areaCd, signguCd);
+    return NextResponse.json({ items, baseYm, source });
   } catch (err) {
     if (err instanceof TourApiError) {
       return NextResponse.json(

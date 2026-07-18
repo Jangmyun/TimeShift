@@ -22,12 +22,12 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const { items, baseYm } = await fetchRelatedSpots(
+    const { items, baseYm, source } = await fetchRelatedSpots(
       areaCd,
       signguCd,
       tAtsCd,
     );
-    return NextResponse.json({ items, baseYm });
+    return NextResponse.json({ items, baseYm, source });
   } catch (err) {
     if (err instanceof TourApiError) {
       return NextResponse.json(

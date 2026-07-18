@@ -1,4 +1,5 @@
 import { callTourApi } from "./client";
+import { getFallbackCongestion, type FetchSource } from "./fallback";
 
 export type CongestionDay = {
   baseYmd: string;
@@ -92,25 +93,34 @@ export async function fetchCongestion(
   areaCd: string,
   signguCd: string,
   spotName: string,
-): Promise<CongestionDay[]> {
-  const items = await callTourApi<CongestionApiItem>(
-    ENDPOINT,
-    SERVICE_KEY,
-    "tatsCnctrRatedList",
-    { areaCd, signguCd, numOfRows: 5000, pageNo: 1 },
-  );
+): Promise<{ series: CongestionDay[]; source: FetchSource }> {
+  let items: CongestionApiItem[];
+  try {
+    items = await callTourApi<CongestionApiItem>(
+      ENDPOINT,
+      SERVICE_KEY,
+      "tatsCnctrRatedList",
+      { areaCd, signguCd, numOfRows: 5000, pageNo: 1 },
+    );
+  } catch (err) {
+    // API 실패 시 대표 지역은 정적 캐시로 degrade(데모 안정성). 캐시 없으면 원래 에러 전파.
+    const fb = getFallbackCongestion(areaCd, signguCd, spotName);
+    if (fb === null) throw err;
+    return { series: fb, source: "fallback" };
+  }
 
   const congestionNames = [...new Set(items.map((item) => item.tAtsNm))];
   const resolved = resolveCongestionName(spotName, congestionNames);
-  if (!resolved) return [];
+  if (!resolved) return { series: [], source: "live" };
 
-  return items
+  const series = items
     .filter((item) => item.tAtsNm === resolved)
     .map((item) => ({
       baseYmd: item.baseYmd,
       cnctrRate: Number(item.cnctrRate),
     }))
     .sort((a, b) => a.baseYmd.localeCompare(b.baseYmd));
+  return { series, source: "live" };
 }
 
 export type RecommendedWindow = {

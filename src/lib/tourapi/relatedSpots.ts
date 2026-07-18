@@ -1,4 +1,5 @@
 import { callTourApi, currentYm, shiftYm } from "./client";
+import { getFallbackRelated, type FetchSource } from "./fallback";
 
 export type RelatedSpot = {
   rlteTatsCd: string;
@@ -37,22 +38,29 @@ export async function fetchRelatedSpots(
   areaCd: string,
   signguCd: string,
   tAtsCd: string,
-): Promise<{ items: RelatedSpot[]; baseYm: string | null }> {
-  let ym = currentYm();
-  for (let i = 0; i <= MAX_LOOKBACK_MONTHS; i++) {
-    const items = await callTourApi<RelatedSpotApiItem>(
-      ENDPOINT,
-      SERVICE_KEY,
-      "areaBasedList1",
-      { areaCd, signguCd, baseYm: ym, numOfRows: 2000, pageNo: 1 },
-    );
-    const filtered = items
-      .filter((item) => item.tAtsCd === tAtsCd)
-      .sort((a, b) => Number(a.rlteRank) - Number(b.rlteRank));
-    if (filtered.length > 0) {
-      return { items: filtered, baseYm: ym };
+): Promise<{ items: RelatedSpot[]; baseYm: string | null; source: FetchSource }> {
+  try {
+    let ym = currentYm();
+    for (let i = 0; i <= MAX_LOOKBACK_MONTHS; i++) {
+      const items = await callTourApi<RelatedSpotApiItem>(
+        ENDPOINT,
+        SERVICE_KEY,
+        "areaBasedList1",
+        { areaCd, signguCd, baseYm: ym, numOfRows: 2000, pageNo: 1 },
+      );
+      const filtered = items
+        .filter((item) => item.tAtsCd === tAtsCd)
+        .sort((a, b) => Number(a.rlteRank) - Number(b.rlteRank));
+      if (filtered.length > 0) {
+        return { items: filtered, baseYm: ym, source: "live" };
+      }
+      ym = shiftYm(ym, -1);
     }
-    ym = shiftYm(ym, -1);
+    return { items: [], baseYm: null, source: "live" };
+  } catch (err) {
+    // API 실패 시 대표 지역은 정적 캐시로 degrade(데모 안정성). 캐시 없으면 원래 에러 전파.
+    const fb = getFallbackRelated(areaCd, signguCd, tAtsCd);
+    if (!fb) throw err;
+    return { items: fb.items, baseYm: fb.baseYm, source: "fallback" };
   }
-  return { items: [], baseYm: null };
 }

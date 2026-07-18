@@ -25,9 +25,9 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const series = await fetchCongestion(areaCd, signguCd, spotName);
+    const { series, source } = await fetchCongestion(areaCd, signguCd, spotName);
     const recommended = findRecommendedWindow(series);
-    return NextResponse.json({ series, recommended });
+    return NextResponse.json({ series, recommended, source });
   } catch (err) {
     if (err instanceof TourApiError) {
       return NextResponse.json(
