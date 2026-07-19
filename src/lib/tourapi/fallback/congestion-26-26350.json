@@ -1,0 +1,552 @@
+{
+"송정해수욕장": [
+{
+"baseYmd": "20260719",
+"cnctrRate": 96.63
+},
+{
+"baseYmd": "20260720",
+"cnctrRate": 67.71
+},
+{
+"baseYmd": "20260721",
+"cnctrRate": 59.49
+},
+{
+"baseYmd": "20260722",
+"cnctrRate": 63.62
+},
+{
+"baseYmd": "20260723",
+"cnctrRate": 71.96
+},
+{
+"baseYmd": "20260724",
+"cnctrRate": 76.24
+},
+{
+"baseYmd": "20260725",
+"cnctrRate": 98.49
+},
+{
+"baseYmd": "20260726",
+"cnctrRate": 99
+},
+{
+"baseYmd": "20260727",
+"cnctrRate": 70.64
+},
+{
+"baseYmd": "20260728",
+"cnctrRate": 65.06
+},
+{
+"baseYmd": "20260729",
+"cnctrRate": 65.49
+},
+{
+"baseYmd": "20260730",
+"cnctrRate": 73.7
+},
+{
+"baseYmd": "20260731",
+"cnctrRate": 73.66
+},
+{
+"baseYmd": "20260801",
+"cnctrRate": 99.32
+},
+{
+"baseYmd": "20260802",
+"cnctrRate": 98.48
+},
+{
+"baseYmd": "20260803",
+"cnctrRate": 71.71
+},
+{
+"baseYmd": "20260804",
+"cnctrRate": 70.05
+},
+{
+"baseYmd": "20260805",
+"cnctrRate": 70.43
+},
+{
+"baseYmd": "20260806",
+"cnctrRate": 72.68
+},
+{
+"baseYmd": "20260807",
+"cnctrRate": 72.87
+},
+{
+"baseYmd": "20260808",
+"cnctrRate": 99
+},
+{
+"baseYmd": "20260809",
+"cnctrRate": 98.38
+},
+{
+"baseYmd": "20260810",
+"cnctrRate": 75.5
+},
+{
+"baseYmd": "20260811",
+"cnctrRate": 69.29
+},
+{
+"baseYmd": "20260812",
+"cnctrRate": 73.79
+},
+{
+"baseYmd": "20260813",
+"cnctrRate": 79.03
+},
+{
+"baseYmd": "20260814",
+"cnctrRate": 79.94
+}
+],
+"해운대해수욕장": [
+{
+"baseYmd": "20260719",
+"cnctrRate": 97.24
+},
+{
+"baseYmd": "20260720",
+"cnctrRate": 73.04
+},
+{
+"baseYmd": "20260721",
+"cnctrRate": 70.94
+},
+{
+"baseYmd": "20260722",
+"cnctrRate": 71.83
+},
+{
+"baseYmd": "20260723",
+"cnctrRate": 75.82
+},
+{
+"baseYmd": "20260724",
+"cnctrRate": 78.84
+},
+{
+"baseYmd": "20260725",
+"cnctrRate": 98.18
+},
+{
+"baseYmd": "20260726",
+"cnctrRate": 99.28
+},
+{
+"baseYmd": "20260727",
+"cnctrRate": 80.64
+},
+{
+"baseYmd": "20260728",
+"cnctrRate": 73.9
+},
+{
+"baseYmd": "20260729",
+"cnctrRate": 90.65
+},
+{
+"baseYmd": "20260730",
+"cnctrRate": 93.55
+},
+{
+"baseYmd": "20260731",
+"cnctrRate": 91.66
+},
+{
+"baseYmd": "20260801",
+"cnctrRate": 99.63
+},
+{
+"baseYmd": "20260802",
+"cnctrRate": 98.88
+},
+{
+"baseYmd": "20260803",
+"cnctrRate": 77.48
+},
+{
+"baseYmd": "20260804",
+"cnctrRate": 71.97
+},
+{
+"baseYmd": "20260805",
+"cnctrRate": 83.72
+},
+{
+"baseYmd": "20260806",
+"cnctrRate": 70.69
+},
+{
+"baseYmd": "20260807",
+"cnctrRate": 74.19
+},
+{
+"baseYmd": "20260808",
+"cnctrRate": 93.65
+},
+{
+"baseYmd": "20260809",
+"cnctrRate": 93.72
+},
+{
+"baseYmd": "20260810",
+"cnctrRate": 70.82
+},
+{
+"baseYmd": "20260811",
+"cnctrRate": 69.02
+},
+{
+"baseYmd": "20260812",
+"cnctrRate": 72.06
+},
+{
+"baseYmd": "20260813",
+"cnctrRate": 82.52
+},
+{
+"baseYmd": "20260814",
+"cnctrRate": 87.89
+}
+],
+"더베이101": [
+{
+"baseYmd": "20260719",
+"cnctrRate": 86.84
+},
+{
+"baseYmd": "20260720",
+"cnctrRate": 63.57
+},
+{
+"baseYmd": "20260721",
+"cnctrRate": 52.97
+},
+{
+"baseYmd": "20260722",
+"cnctrRate": 51.89
+},
+{
+"baseYmd": "20260723",
+"cnctrRate": 61.85
+},
+{
+"baseYmd": "20260724",
+"cnctrRate": 63.03
+},
+{
+"baseYmd": "20260725",
+"cnctrRate": 95.36
+},
+{
+"baseYmd": "20260726",
+"cnctrRate": 94.24
+},
+{
+"baseYmd": "20260727",
+"cnctrRate": 61.25
+},
+{
+"baseYmd": "20260728",
+"cnctrRate": 60.61
+},
+{
+"baseYmd": "20260729",
+"cnctrRate": 73.89
+},
+{
+"baseYmd": "20260730",
+"cnctrRate": 83.32
+},
+{
+"baseYmd": "20260731",
+"cnctrRate": 81.87
+},
+{
+"baseYmd": "20260801",
+"cnctrRate": 97.25
+},
+{
+"baseYmd": "20260802",
+"cnctrRate": 97
+},
+{
+"baseYmd": "20260803",
+"cnctrRate": 74.65
+},
+{
+"baseYmd": "20260804",
+"cnctrRate": 72.78
+},
+{
+"baseYmd": "20260805",
+"cnctrRate": 73.36
+},
+{
+"baseYmd": "20260806",
+"cnctrRate": 77.49
+},
+{
+"baseYmd": "20260807",
+"cnctrRate": 76.27
+},
+{
+"baseYmd": "20260808",
+"cnctrRate": 96.91
+},
+{
+"baseYmd": "20260809",
+"cnctrRate": 94
+},
+{
+"baseYmd": "20260810",
+"cnctrRate": 80.18
+},
+{
+"baseYmd": "20260811",
+"cnctrRate": 78.94
+},
+{
+"baseYmd": "20260812",
+"cnctrRate": 75.81
+},
+{
+"baseYmd": "20260813",
+"cnctrRate": 81.39
+},
+{
+"baseYmd": "20260814",
+"cnctrRate": 75.56
+}
+],
+"SEA LIFE 부산아쿠아리움": [
+{
+"baseYmd": "20260719",
+"cnctrRate": 93.33
+},
+{
+"baseYmd": "20260720",
+"cnctrRate": 70.32
+},
+{
+"baseYmd": "20260721",
+"cnctrRate": 69.44
+},
+{
+"baseYmd": "20260722",
+"cnctrRate": 71.61
+},
+{
+"baseYmd": "20260723",
+"cnctrRate": 70.85
+},
+{
+"baseYmd": "20260724",
+"cnctrRate": 79.44
+},
+{
+"baseYmd": "20260725",
+"cnctrRate": 98.86
+},
+{
+"baseYmd": "20260726",
+"cnctrRate": 99.34
+},
+{
+"baseYmd": "20260727",
+"cnctrRate": 75.11
+},
+{
+"baseYmd": "20260728",
+"cnctrRate": 70.01
+},
+{
+"baseYmd": "20260729",
+"cnctrRate": 85.27
+},
+{
+"baseYmd": "20260730",
+"cnctrRate": 93.91
+},
+{
+"baseYmd": "20260731",
+"cnctrRate": 95.24
+},
+{
+"baseYmd": "20260801",
+"cnctrRate": 99.9
+},
+{
+"baseYmd": "20260802",
+"cnctrRate": 99.83
+},
+{
+"baseYmd": "20260803",
+"cnctrRate": 72.12
+},
+{
+"baseYmd": "20260804",
+"cnctrRate": 69.78
+},
+{
+"baseYmd": "20260805",
+"cnctrRate": 72.75
+},
+{
+"baseYmd": "20260806",
+"cnctrRate": 76.63
+},
+{
+"baseYmd": "20260807",
+"cnctrRate": 75.02
+},
+{
+"baseYmd": "20260808",
+"cnctrRate": 97
+},
+{
+"baseYmd": "20260809",
+"cnctrRate": 95.3
+},
+{
+"baseYmd": "20260810",
+"cnctrRate": 68.54
+},
+{
+"baseYmd": "20260811",
+"cnctrRate": 68.61
+},
+{
+"baseYmd": "20260812",
+"cnctrRate": 70.31
+},
+{
+"baseYmd": "20260813",
+"cnctrRate": 74.46
+},
+{
+"baseYmd": "20260814",
+"cnctrRate": 77.86
+}
+],
+"청사포다릿돌전망대": [
+{
+"baseYmd": "20260719",
+"cnctrRate": 72.77
+},
+{
+"baseYmd": "20260720",
+"cnctrRate": 63.72
+},
+{
+"baseYmd": "20260721",
+"cnctrRate": 50.01
+},
+{
+"baseYmd": "20260722",
+"cnctrRate": 66.72
+},
+{
+"baseYmd": "20260723",
+"cnctrRate": 51.09
+},
+{
+"baseYmd": "20260724",
+"cnctrRate": 71.09
+},
+{
+"baseYmd": "20260725",
+"cnctrRate": 90.53
+},
+{
+"baseYmd": "20260726",
+"cnctrRate": 90.88
+},
+{
+"baseYmd": "20260727",
+"cnctrRate": 72.34
+},
+{
+"baseYmd": "20260728",
+"cnctrRate": 64.67
+},
+{
+"baseYmd": "20260729",
+"cnctrRate": 61.45
+},
+{
+"baseYmd": "20260730",
+"cnctrRate": 70.26
+},
+{
+"baseYmd": "20260731",
+"cnctrRate": 87.16
+},
+{
+"baseYmd": "20260801",
+"cnctrRate": 92.96
+},
+{
+"baseYmd": "20260802",
+"cnctrRate": 67.23
+},
+{
+"baseYmd": "20260803",
+"cnctrRate": 64.11
+},
+{
+"baseYmd": "20260804",
+"cnctrRate": 71.87
+},
+{
+"baseYmd": "20260805",
+"cnctrRate": 70.95
+},
+{
+"baseYmd": "20260806",
+"cnctrRate": 72.79
+},
+{
+"baseYmd": "20260807",
+"cnctrRate": 96.63
+},
+{
+"baseYmd": "20260808",
+"cnctrRate": 87.61
+},
+{
+"baseYmd": "20260809",
+"cnctrRate": 93.23
+},
+{
+"baseYmd": "20260810",
+"cnctrRate": 49.86
+},
+{
+"baseYmd": "20260811",
+"cnctrRate": 48.5
+},
+{
+"baseYmd": "20260812",
+"cnctrRate": 51.75
+},
+{
+"baseYmd": "20260813",
+"cnctrRate": 53.23
+},
+{
+"baseYmd": "20260814",
+"cnctrRate": 75.04
+}
+]
+}
