@@ -670,6 +670,7 @@ export default function Home() {
             recommended={
               congestion.status === "success" ? congestion.recommended : null
             }
+            summary={summary.status === "success" ? summary.text : null}
           />
         </div>
       )}
