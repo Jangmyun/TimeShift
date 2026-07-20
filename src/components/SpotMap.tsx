@@ -187,7 +187,8 @@ export function SpotMap({
         bounds.extend(center);
         let extended = 1;
 
-        // 중심 관광지 마커 — 추천 방문 시기(+요약이 이미 있으면 함께)를 인포윈도우로 기본 표시.
+        // 중심 관광지 — 카카오 기본 핀. 지도 중앙(center)에 위치하고, 추천 방문 시기(+요약이 이미
+        // 있으면 함께)를 담은 인포윈도우를 기본으로 열어둬 선택한 중심 관광지임을 나타낸다.
         const hubMarker = new maps.Marker({
           position: center,
           map,

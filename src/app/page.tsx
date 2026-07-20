@@ -688,8 +688,8 @@ export default function Home() {
             {selectedSpot.hubTatsNm} · 주변 지도
           </h2>
           <p className="mb-4 mt-[4px] text-[14px]" style={{ color: "#6d7882" }}>
-            파란 마커가 중심 관광지, 나머지는 주변 연관 관광지입니다. 마커를 누르면
-            상세 정보가 열립니다.
+            지도 중앙의 정보창이 열린 마커가 선택한 중심 관광지, 나머지는 주변 연관
+            관광지입니다. 마커를 누르면 상세 정보가 열립니다.
           </p>
           <SpotMap
             spot={selectedSpot}
