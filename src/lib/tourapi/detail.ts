@@ -84,10 +84,22 @@ function pickBest(
   return bestDist <= MAX_MATCH_KM ? best : null;
 }
 
-/** visitkorea CDN 이미지가 http로 내려오는 경우가 있어 https로 정규화(next/image remotePatterns). */
-function toHttps(url?: string | null): string | null {
+/**
+ * 이미지 URL을 next/image에 안전하게 넘길 수 있는 형태로 정규화한다.
+ * - http → https (visitkorea CDN이 http로 내려오는 경우가 있음)
+ * - **호스트가 허용 목록(visitkorea 서브도메인) 밖이면 null**. next.config의 remotePatterns에
+ *   없는 호스트를 `<Image src>`에 넘기면 렌더 중 throw되어 페이지 전체가 크래시하므로, 여기서
+ *   걸러 이미지 없이 degrade한다. 허용 호스트는 next.config.ts의 remotePatterns와 반드시 일치.
+ */
+function safeImage(url?: string | null): string | null {
   if (!url) return null;
-  return url.replace(/^http:\/\//i, "https://");
+  const https = url.replace(/^http:\/\//i, "https://");
+  try {
+    const host = new URL(https).hostname;
+    return host.endsWith(".visitkorea.or.kr") ? https : null;
+  } catch {
+    return null;
+  }
 }
 
 /** detailCommon2의 homepage 필드는 보통 `<a href="URL" ...>URL</a>` 마크업 → 순수 URL만 추출. */
@@ -150,7 +162,7 @@ export async function fetchSpotDetail(
     return {
       contentId: best.contentid,
       title: common?.title || best.title,
-      image: toHttps(best.firstimage || common?.firstimage),
+      image: safeImage(best.firstimage || common?.firstimage),
       address: common?.addr1 || best.addr1 || null,
       homepage: cleanHomepage(common?.homepage),
       overview: common?.overview || null,
