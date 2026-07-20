@@ -678,28 +678,36 @@ export default function Home() {
       )}
 
       {/* F7 — 카카오맵 시각화. 중심 관광지(정확 좌표) + 연관 관광지(이름 지오코딩) 마커.
-          연관 목록이 도착했을 때만 렌더(중심 좌표만으론 지도의 정보량이 부족). */}
-      {selectedSpot && related.status === "success" && (
-        <div
-          className="w-full rounded-[12px] border bg-white p-[24px]"
-          style={{ borderColor: KRDS_BORDER_DEFAULT }}
-        >
-          <h2 className="text-[19px] font-semibold">
-            {selectedSpot.hubTatsNm} · 주변 지도
-          </h2>
-          <p className="mb-4 mt-[4px] text-[14px]" style={{ color: "#6d7882" }}>
-            지도 중앙의 정보창이 열린 마커가 선택한 중심 관광지, 나머지는 주변 연관
-            관광지입니다. 마커를 누르면 상세 정보가 열립니다.
-          </p>
-          <SpotMap
-            spot={selectedSpot}
-            related={related.items}
-            recommended={
-              congestion.status === "success" ? congestion.recommended : null
-            }
-          />
-        </div>
-      )}
+          연관 조회가 끝나면(성공/없음/실패) 렌더 — 연관이 없어도 중심 관광지만이라도 지도에
+          띄운다(SpotMap은 연관 0건일 때 중심만 표시). */}
+      {selectedSpot &&
+        (related.status === "success" ||
+          related.status === "empty" ||
+          related.status === "error") && (
+          <div
+            className="w-full rounded-[12px] border bg-white p-[24px]"
+            style={{ borderColor: KRDS_BORDER_DEFAULT }}
+          >
+            <h2 className="text-[19px] font-semibold">
+              {selectedSpot.hubTatsNm} · 주변 지도
+            </h2>
+            <p
+              className="mb-4 mt-[4px] text-[14px]"
+              style={{ color: "#6d7882" }}
+            >
+              {related.status === "success" && related.items.length > 0
+                ? "지도 중앙의 정보창이 열린 마커가 선택한 중심 관광지, 나머지는 주변 연관 관광지입니다. 마커를 누르면 상세 정보가 열립니다."
+                : "지도 중앙의 정보창이 열린 마커가 선택한 중심 관광지입니다. 마커를 누르면 상세 정보가 열립니다."}
+            </p>
+            <SpotMap
+              spot={selectedSpot}
+              related={related.status === "success" ? related.items : []}
+              recommended={
+                congestion.status === "success" ? congestion.recommended : null
+              }
+            />
+          </div>
+        )}
 
       {selectedSpot && summary.status !== "idle" && (
         <div
