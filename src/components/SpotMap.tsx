@@ -110,11 +110,30 @@ const MAX_RELATED_MARKERS = 8;
 // 마커 인포윈도우에 넣을 F5 요약 최대 길이(길면 말줄임 — 전문은 아래 요약 카드에 있다).
 const SUMMARY_SNIPPET_MAX = 90;
 
-// 중심 관광지 인포윈도우 HTML(F2 추천 방문시기 + F5 요약 스니펫). 지도 초기화와 요약 도착
-// 두 시점에서 같은 콘텐츠를 만들 수 있도록 헬퍼로 분리한다(PRD F7: 마커 클릭 시 F2·F5 팝업).
+// 인포윈도우 하단의 카카오맵 바로가기. `map.kakao.com/link`는 모바일에서 카카오맵 앱을, 데스크톱
+// 에서 카카오맵 웹을 새 탭으로 연다(map=해당 위치 지도, to=길찾기). 이름은 콤마 구조가 깨지지
+// 않도록 encodeURIComponent로 감싼다.
+function kakaoMapLinks(name: string, lat: number, lng: number): string {
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return "";
+  const n = encodeURIComponent(name);
+  const base = "https://map.kakao.com/link";
+  const linkStyle =
+    "color:#256ef4;font-weight:600;text-decoration:none;white-space:nowrap;";
+  return (
+    `<div style="margin-top:8px;padding-top:6px;border-top:1px solid #e6e8ea;display:flex;gap:12px;">` +
+    `<a href="${base}/map/${n},${lat},${lng}" target="_blank" rel="noopener noreferrer" style="${linkStyle}">카카오맵에서 보기</a>` +
+    `<a href="${base}/to/${n},${lat},${lng}" target="_blank" rel="noopener noreferrer" style="${linkStyle}">길찾기</a>` +
+    `</div>`
+  );
+}
+
+// 중심 관광지 인포윈도우 HTML(F2 추천 방문시기 + F5 요약 스니펫 + 카카오맵 링크). 지도 초기화와
+// 요약 도착 두 시점에서 같은 콘텐츠를 만들 수 있도록 헬퍼로 분리한다(PRD F7: 마커 클릭 시 F2·F5).
 function buildHubContent(
   spotName: string,
   recommended: RecommendedWindow | null,
+  lat: number,
+  lng: number,
   summary?: string | null,
 ): string {
   const snippet = summary?.trim()
@@ -132,6 +151,7 @@ function buildHubContent(
     (snippet
       ? `<div style="margin-top:6px;padding-top:6px;border-top:1px solid #e6e8ea;color:#6d7882;">${escapeHtml(snippet)}</div>`
       : "") +
+    kakaoMapLinks(spotName, lat, lng) +
     `</div>`
   );
 }
@@ -198,13 +218,14 @@ export function SpotMap({
         hubMarkerRef.current = hubMarker;
         const hubInfo = new maps.InfoWindow({
           // 요약은 뒤따르는 summary effect가 채운다(여기선 F2 추천 방문시기까지만).
-          content: buildHubContent(spot.hubTatsNm, recommended),
+          content: buildHubContent(spot.hubTatsNm, recommended, lat, lng),
+          removable: true, // X 버튼으로 닫기.
         });
         hubInfoRef.current = hubInfo;
         hubInfo.open(map, hubMarker);
 
-        // 연관 관광지 마커 클릭 시 재사용하는 단일 인포윈도우(동시에 하나만 열리게).
-        const relatedInfo = new maps.InfoWindow({ content: "" });
+        // 연관 관광지 마커 클릭 시 재사용하는 단일 인포윈도우(동시에 하나만 열리게, X로 닫기).
+        const relatedInfo = new maps.InfoWindow({ content: "", removable: true });
 
         const topRelated = related.slice(0, MAX_RELATED_MARKERS);
         let pending = topRelated.length;
@@ -235,11 +256,14 @@ export function SpotMap({
                   markers.push(marker);
                   bounds.extend(pos);
                   extended += 1;
+                  const rLat = Number(data[0].y);
+                  const rLng = Number(data[0].x);
                   maps.event.addListener(marker, "click", () => {
                     relatedInfo.setContent(
-                      `<div style="padding:8px 12px;font-size:13px;line-height:1.5;color:#1e2124;">` +
+                      `<div style="padding:8px 12px;font-size:13px;line-height:1.5;color:#1e2124;max-width:240px;">` +
                         `<strong>${escapeHtml(r.rlteTatsNm)}</strong><br/>` +
                         `<span style="color:#6d7882;">${escapeHtml(r.rlteCtgryLclsNm)} · ${escapeHtml(r.rlteCtgryMclsNm)}</span>` +
+                        kakaoMapLinks(r.rlteTatsNm, rLat, rLng) +
                         `</div>`,
                     );
                     relatedInfo.open(map, marker);
@@ -276,7 +300,15 @@ export function SpotMap({
     const marker = hubMarkerRef.current;
     const map = mapRef.current;
     if (!info || !marker || !map) return;
-    info.setContent(buildHubContent(spot.hubTatsNm, recommended, summary));
+    info.setContent(
+      buildHubContent(
+        spot.hubTatsNm,
+        recommended,
+        Number(spot.mapY),
+        Number(spot.mapX),
+        summary,
+      ),
+    );
   }, [summary, recommended, spot]);
 
   // 키 미설정 등으로 지도를 못 그릴 때의 폴백(계획문서 F7: "지도 준비중" degrade).
