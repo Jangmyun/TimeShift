@@ -17,5 +17,13 @@ export async function GET(request: NextRequest) {
   }
 
   const detail = await fetchSpotDetail(spotName, mapX, mapY);
-  return NextResponse.json({ detail });
+  // 관광지 상세정보(이미지·개요)는 거의 변하지 않는 정적 데이터 → 하루 캐싱.
+  return NextResponse.json(
+    { detail },
+    {
+      headers: {
+        "Cache-Control": "public, max-age=86400, stale-while-revalidate=604800",
+      },
+    },
+  );
 }

@@ -22,7 +22,16 @@ export async function GET(request: NextRequest) {
 
   try {
     const { items, baseYm, source } = await fetchHubSpots(areaCd, signguCd);
-    return NextResponse.json({ items, baseYm, source });
+    // 중심 관광지 목록은 baseYm(월 단위)로 갱신되는 느린 데이터 → 브라우저 캐싱으로 지역
+    // 재선택 시 재요청을 피한다. stale-while-revalidate로 만료 후에도 즉시 응답 + 백그라운드 갱신.
+    return NextResponse.json(
+      { items, baseYm, source },
+      {
+        headers: {
+          "Cache-Control": "public, max-age=1800, stale-while-revalidate=86400",
+        },
+      },
+    );
   } catch (err) {
     if (err instanceof TourApiError) {
       return NextResponse.json(

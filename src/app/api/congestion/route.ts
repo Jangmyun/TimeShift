@@ -27,7 +27,15 @@ export async function GET(request: NextRequest) {
   try {
     const { series, source } = await fetchCongestion(areaCd, signguCd, spotName);
     const recommended = findRecommendedWindow(series);
-    return NextResponse.json({ series, recommended, source });
+    // 집중률은 하루 단위로 바뀌는 데이터 → 같은 관광지 재선택 시 재요청 회피(브라우저 캐싱).
+    return NextResponse.json(
+      { series, recommended, source },
+      {
+        headers: {
+          "Cache-Control": "public, max-age=1800, stale-while-revalidate=86400",
+        },
+      },
+    );
   } catch (err) {
     if (err instanceof TourApiError) {
       return NextResponse.json(

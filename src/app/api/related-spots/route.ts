@@ -27,7 +27,15 @@ export async function GET(request: NextRequest) {
       signguCd,
       tAtsCd,
     );
-    return NextResponse.json({ items, baseYm, source });
+    // 연관 관광지는 baseYm(월 단위) 데이터 → 재선택 시 재요청 회피(브라우저 캐싱).
+    return NextResponse.json(
+      { items, baseYm, source },
+      {
+        headers: {
+          "Cache-Control": "public, max-age=1800, stale-while-revalidate=86400",
+        },
+      },
+    );
   } catch (err) {
     if (err instanceof TourApiError) {
       return NextResponse.json(
