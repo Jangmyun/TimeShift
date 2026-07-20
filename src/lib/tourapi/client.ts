@@ -18,6 +18,10 @@ type TourApiEnvelope<T> = {
   };
 };
 
+// 공공데이터 호출 타임아웃(ms). 정상 응답은 대략 4초 이내라 8초면 느린 응답도 허용하면서
+// data.go.kr 지연·불통 시 undici 기본 10초 대신 더 빨리 실패하게 한다.
+const REQUEST_TIMEOUT_MS = 8000;
+
 export class TourApiError extends Error {
   constructor(
     public resultCode: string,
@@ -57,7 +61,21 @@ export async function callTourApi<T>(
   }
 
   const url = `${endpoint.replace(/\/$/, "")}/${operation}?${query.toString()}`;
-  const res = await fetch(url, { cache: "no-store" });
+  // 명시적 타임아웃(내장 AbortSignal). 없으면 undici 기본 10초 커넥트 타임아웃까지 매달려,
+  // data.go.kr가 느리거나 불통일 때 폴백 없는 지역이 10초씩 502로 지연된다(정상 응답은 ~4s라
+  // 8초면 충분한 여유). 타임아웃/네트워크 오류는 throw되어 상위 fetch* 헬퍼가 폴백/502로 처리.
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      cache: "no-store",
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+    });
+  } catch (err) {
+    if (err instanceof DOMException && err.name === "TimeoutError") {
+      throw new Error(`TourAPI 타임아웃(${REQUEST_TIMEOUT_MS}ms): ${operation}`);
+    }
+    throw err;
+  }
   if (!res.ok) {
     throw new Error(`TourAPI HTTP ${res.status}: ${operation}`);
   }
