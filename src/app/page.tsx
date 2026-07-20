@@ -68,6 +68,10 @@ const KRDS_PRIMARY_50 = "#256ef4"; // --krds-color-light-primary-50
 // STEP2 목록은 처음에 상위 TOP_N개만 보여주고 "더 보기"로 확장한다(긴 목록 스크롤 부담 완화).
 const TOP_N = 8;
 
+// 연관 관광지가 없을 때 SpotMap에 넘길 안정적인 빈 배열. 매 렌더마다 `[]` 리터럴을 만들면
+// 참조가 바뀌어 SpotMap의 init effect(deps에 related)가 재실행 → 지도 전체를 다시 그린다.
+const EMPTY_RELATED: RelatedSpot[] = [];
+
 export default function Home() {
   const [areaCd, setAreaCd] = useState<string>("");
   const [signguCd, setSignguCd] = useState<string>("");
@@ -701,7 +705,9 @@ export default function Home() {
             </p>
             <SpotMap
               spot={selectedSpot}
-              related={related.status === "success" ? related.items : []}
+              related={
+                related.status === "success" ? related.items : EMPTY_RELATED
+              }
               recommended={
                 congestion.status === "success" ? congestion.recommended : null
               }
@@ -782,6 +788,8 @@ function SpotDetailCard({ detail }: { detail: SpotDetail }) {
           alt={detail.title}
           width={220}
           height={160}
+          // 표시 크기는 모바일 전폭, 데스크톱 220px → 그에 맞는 변형만 받도록 sizes 지정.
+          sizes="(max-width: 640px) 100vw, 220px"
           className="h-[160px] w-full rounded-[10px] object-cover sm:w-[220px]"
           style={{ border: `1px solid ${KRDS_BORDER_DEFAULT}` }}
         />
