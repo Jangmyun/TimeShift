@@ -107,8 +107,6 @@ function escapeHtml(s: string) {
 }
 
 const MAX_RELATED_MARKERS = 8;
-// 마커 인포윈도우에 넣을 F5 요약 최대 길이(길면 말줄임 — 전문은 아래 요약 카드에 있다).
-const SUMMARY_SNIPPET_MAX = 90;
 
 // 인포윈도우 하단의 카카오맵 바로가기. `map.kakao.com/link`는 모바일에서 카카오맵 앱을, 데스크톱
 // 에서 카카오맵 웹을 새 탭으로 연다(map=해당 위치 지도, to=길찾기). 이름은 콤마 구조가 깨지지
@@ -127,29 +125,20 @@ function kakaoMapLinks(name: string, lat: number, lng: number): string {
   );
 }
 
-// 중심 관광지 인포윈도우 HTML(F2 추천 방문시기 + F5 요약 스니펫 + 카카오맵 링크). 지도 초기화와
-// 요약 도착 두 시점에서 같은 콘텐츠를 만들 수 있도록 헬퍼로 분리한다(PRD F7: 마커 클릭 시 F2·F5).
+// 중심 관광지 인포윈도우 HTML(장소명 + F2 추천 방문시기 + 카카오맵 링크). LLM 추천코스는 넣지
+// 않는다 — 아래 "AI 추천 코스" 카드에서 전문을 보여준다.
 function buildHubContent(
   spotName: string,
   recommended: RecommendedWindow | null,
   lat: number,
   lng: number,
-  summary?: string | null,
 ): string {
-  const snippet = summary?.trim()
-    ? summary.trim().length > SUMMARY_SNIPPET_MAX
-      ? summary.trim().slice(0, SUMMARY_SNIPPET_MAX) + "…"
-      : summary.trim()
-    : "";
   return (
     `<div style="padding:8px 12px;font-size:13px;line-height:1.5;color:#1e2124;max-width:240px;">` +
     `<strong>${escapeHtml(spotName)}</strong><br/>` +
     `<span style="color:#256ef4;">중심 관광지</span>` +
     (recommended
       ? `<br/>추천 방문 ${formatMd(recommended.startYmd)}~${formatMd(recommended.endYmd)}`
-      : "") +
-    (snippet
-      ? `<div style="margin-top:6px;padding-top:6px;border-top:1px solid #e6e8ea;color:#6d7882;">${escapeHtml(snippet)}</div>`
       : "") +
     kakaoMapLinks(spotName, lat, lng) +
     `</div>`
@@ -160,24 +149,16 @@ export function SpotMap({
   spot,
   related,
   recommended,
-  summary,
 }: {
   spot: HubSpot;
   related: RelatedSpot[];
   recommended: RecommendedWindow | null;
-  summary?: string | null;
 }) {
   const appKey = process.env.NEXT_PUBLIC_KAKAO_MAP_APP_KEY;
   const containerRef = useRef<HTMLDivElement>(null);
   const [status, setStatus] = useState<"loading" | "ready" | "error">(
     "loading",
   );
-  // 요약은 지도 초기화보다 늦게 도착한다. 지도를 재초기화(연관 마커 재지오코딩)하지 않고
-  // hub 인포윈도우만 갱신하려고 map/marker/infowindow를 ref로 들고 있는다. 요약 반영은
-  // 아래 별도 effect가 담당하므로 여기서 summary를 참조하지 않는다.
-  const mapRef = useRef<KakaoMap | null>(null);
-  const hubMarkerRef = useRef<KakaoMarker | null>(null);
-  const hubInfoRef = useRef<KakaoInfoWindow | null>(null);
 
   useEffect(() => {
     // 키 미설정은 아래 렌더 폴백("지도를 불러올 수 없습니다")이 처리하므로 여기선 조용히 종료.
@@ -202,26 +183,22 @@ export function SpotMap({
 
         const center = new maps.LatLng(lat, lng);
         const map = new maps.Map(container, { center, level: 6 });
-        mapRef.current = map;
         const bounds = new maps.LatLngBounds();
         bounds.extend(center);
         let extended = 1;
 
-        // 중심 관광지 — 카카오 기본 핀. 지도 중앙(center)에 위치하고, 추천 방문 시기(+요약이 이미
-        // 있으면 함께)를 담은 인포윈도우를 기본으로 열어둬 선택한 중심 관광지임을 나타낸다.
+        // 중심 관광지 — 카카오 기본 핀. 지도 중앙(center)에 위치하고, 장소명·추천 방문시기를 담은
+        // 인포윈도우를 기본으로 열어둬 선택한 중심 관광지임을 나타낸다.
         const hubMarker = new maps.Marker({
           position: center,
           map,
           title: spot.hubTatsNm,
         });
         markers.push(hubMarker);
-        hubMarkerRef.current = hubMarker;
         const hubInfo = new maps.InfoWindow({
-          // 요약은 뒤따르는 summary effect가 채운다(여기선 F2 추천 방문시기까지만).
           content: buildHubContent(spot.hubTatsNm, recommended, lat, lng),
           removable: true, // X 버튼으로 닫기.
         });
-        hubInfoRef.current = hubInfo;
         hubInfo.open(map, hubMarker);
 
         // 연관 관광지 마커 클릭 시 재사용하는 단일 인포윈도우(동시에 하나만 열리게, X로 닫기).
@@ -287,29 +264,8 @@ export function SpotMap({
     return () => {
       cancelled = true;
       markers.forEach((m) => m.setMap(null));
-      mapRef.current = null;
-      hubMarkerRef.current = null;
-      hubInfoRef.current = null;
     };
   }, [appKey, spot, related, recommended]);
-
-  // F5 요약은 지도보다 늦게 도착한다. 지도가 이미 그려져 있으면 재초기화 없이 hub 인포윈도우
-  // 콘텐츠만 갱신한다(summary는 위 init effect의 deps에 없다 — 여기서만 반영).
-  useEffect(() => {
-    const info = hubInfoRef.current;
-    const marker = hubMarkerRef.current;
-    const map = mapRef.current;
-    if (!info || !marker || !map) return;
-    info.setContent(
-      buildHubContent(
-        spot.hubTatsNm,
-        recommended,
-        Number(spot.mapY),
-        Number(spot.mapX),
-        summary,
-      ),
-    );
-  }, [summary, recommended, spot]);
 
   // 키 미설정 등으로 지도를 못 그릴 때의 폴백(계획문서 F7: "지도 준비중" degrade).
   if (!appKey || status === "error") {

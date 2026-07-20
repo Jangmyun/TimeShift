@@ -697,49 +697,65 @@ export default function Home() {
             recommended={
               congestion.status === "success" ? congestion.recommended : null
             }
-            summary={summary.status === "success" ? summary.text : null}
           />
         </div>
       )}
 
       {selectedSpot && summary.status !== "idle" && (
         <div
-          className="w-full rounded-[12px] border p-[24px]"
-          style={{
-            borderColor: KRDS_BORDER_SELECTED,
-            backgroundColor: KRDS_BG_SELECTED,
-          }}
+          className="w-full overflow-hidden rounded-[16px] shadow-sm"
+          style={{ border: `2px solid ${KRDS_BORDER_SELECTED}` }}
         >
-          <div className="flex items-center gap-[8px]">
-            <Badge variant="filled" color="primary" size="small" rounded>
-              AI 추천 코스
-            </Badge>
+          {/* 헤더 밴드 — primary 배경으로 시선을 끌어 "AI 추천 코스"를 명확히 강조. */}
+          <div
+            className="flex items-center gap-[12px] px-[24px] py-[16px]"
+            style={{
+              background: `linear-gradient(135deg, ${KRDS_PRIMARY_50} 0%, #0b50d0 100%)`,
+            }}
+          >
+            <span
+              aria-hidden
+              className="flex h-[36px] w-[36px] shrink-0 items-center justify-center rounded-full text-[18px]"
+              style={{ backgroundColor: "rgba(255,255,255,0.2)" }}
+            >
+              ✨
+            </span>
+            <div className="flex flex-col">
+              <span className="text-[18px] font-bold text-white">
+                AI 추천 코스
+              </span>
+              <span className="text-[13px] text-white/85">
+                {selectedSpot.hubTatsNm} 방문 시기와 주변 코스를 AI가 정리했어요
+              </span>
+            </div>
             {summary.status === "success" && summary.source === "fallback" && (
-              <Badge variant="outline" color="gray" size="small">
+              <span className="ml-auto shrink-0 rounded-full bg-white/25 px-[10px] py-[4px] text-[11px] font-semibold text-white">
                 기본 안내
-              </Badge>
+              </span>
             )}
           </div>
-          {summary.status === "loading" && (
-            <div className="mt-4 flex justify-center">
-              <Spinner label="AI가 방문 코스를 정리하는 중..." />
-            </div>
-          )}
-          {summary.status === "error" && (
-            <div className="mt-4">
+
+          {/* 본문 — 넉넉한 여백과 큰 줄간격으로 가독성 확보. */}
+          <div className="bg-white px-[24px] py-[22px]">
+            {summary.status === "loading" && (
+              <div className="flex justify-center py-2">
+                <Spinner label="AI가 방문 코스를 정리하는 중..." />
+              </div>
+            )}
+            {summary.status === "error" && (
               <CriticalAlert
                 alerts={[{ variant: "danger", message: summary.message }]}
               />
-            </div>
-          )}
-          {summary.status === "success" && (
-            <p
-              className="mt-3 text-[16px] leading-relaxed"
-              style={{ color: "#1e2124" /* --krds-color-light-gray-90 */ }}
-            >
-              {summary.text}
-            </p>
-          )}
+            )}
+            {summary.status === "success" && (
+              <p
+                className="whitespace-pre-line text-[17px] leading-[1.85]"
+                style={{ color: "#1e2124" /* --krds-color-light-gray-90 */ }}
+              >
+                {summary.text}
+              </p>
+            )}
+          </div>
         </div>
       )}
     </main>
