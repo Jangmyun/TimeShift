@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Image from "next/image";
 import {
   Select,
   Badge,
@@ -14,6 +15,7 @@ import { REGIONS } from "@/lib/regions";
 import type { HubSpot } from "@/lib/tourapi/hubSpots";
 import type { CongestionDay, RecommendedWindow } from "@/lib/tourapi/congestion";
 import type { RelatedSpot } from "@/lib/tourapi/relatedSpots";
+import type { SpotDetail } from "@/lib/tourapi/detail";
 import { CongestionChart } from "@/components/CongestionChart";
 import { SpotMap } from "@/components/SpotMap";
 
@@ -48,6 +50,12 @@ type SummaryState =
   | { status: "error"; message: string }
   | { status: "success"; text: string; source: "llm" | "fallback" };
 
+// 상세정보 보강(F2): 순수 부가 정보라 로딩/실패 상태는 UI를 막지 않는다(있으면 표시, 없으면 생략).
+type DetailState =
+  | { status: "idle" }
+  | { status: "loading" }
+  | { status: "done"; detail: SpotDetail | null };
+
 // krds-react design tokens (.claude/skills/krds-design/references/design-tokens.md).
 // Card containers have no krds-react component equivalent, so their border/background
 // colors are pulled from the real KRDS palette instead of default Tailwind grays/blues.
@@ -76,6 +84,7 @@ export default function Home() {
   const [conditionText, setConditionText] = useState<string>("");
   const [parsing, setParsing] = useState(false);
   const [summary, setSummary] = useState<SummaryState>({ status: "idle" });
+  const [detail, setDetail] = useState<DetailState>({ status: "idle" });
   // STEP2 목록 "상위 8개만 / 전체" 토글.
   const [showAllSpots, setShowAllSpots] = useState(false);
 
@@ -112,11 +121,25 @@ export default function Home() {
     setSelectedSpot(spot);
     setCongestion({ status: "loading" });
     setRelated({ status: "loading" });
+    setDetail({ status: "loading" });
     // 새 관광지를 고르면 이전 F4 조건/필터·F5 요약을 초기화.
     setCategoryFilter("");
     setKeywords([]);
     setConditionText("");
     setSummary({ status: "idle" });
+
+    // 상세정보 보강(F2): 이미지·개요·홈페이지. 실패해도 코어 플로우 무영향 → done+null로 흡수.
+    void (async () => {
+      try {
+        const res = await fetch(
+          `/api/spot-detail?spotName=${encodeURIComponent(spot.hubTatsNm)}&mapX=${encodeURIComponent(spot.mapX)}&mapY=${encodeURIComponent(spot.mapY)}`,
+        );
+        const data = await res.json();
+        setDetail({ status: "done", detail: res.ok ? data.detail : null });
+      } catch {
+        setDetail({ status: "done", detail: null });
+      }
+    })();
 
     void (async () => {
       try {
@@ -511,6 +534,10 @@ export default function Home() {
           <h2 className="text-[19px] font-semibold">
             {selectedSpot.hubTatsNm} · 향후 30일 집중률 예측
           </h2>
+          {/* 상세정보 보강(F2): 대표이미지·개요·홈페이지. 데이터가 있을 때만 렌더(없으면 생략). */}
+          {detail.status === "done" && detail.detail && (
+            <SpotDetailCard detail={detail.detail} />
+          )}
           {congestion.status === "loading" && (
             <div className="mt-4 flex justify-center">
               <Spinner label="집중률 데이터를 불러오는 중..." />
@@ -716,6 +743,64 @@ export default function Home() {
         </div>
       )}
     </main>
+  );
+}
+
+// 상세정보 보강 카드(F2): 대표이미지 + 주소 + 개요(더보기 토글) + 홈페이지 링크.
+function SpotDetailCard({ detail }: { detail: SpotDetail }) {
+  const [expanded, setExpanded] = useState(false);
+  const hasLongOverview = (detail.overview?.length ?? 0) > 140;
+  return (
+    <div className="mt-4 flex flex-col gap-[16px] sm:flex-row">
+      {detail.image && (
+        <Image
+          src={detail.image}
+          alt={detail.title}
+          width={220}
+          height={160}
+          className="h-[160px] w-full rounded-[10px] object-cover sm:w-[220px]"
+          style={{ border: `1px solid ${KRDS_BORDER_DEFAULT}` }}
+        />
+      )}
+      <div className="flex-1">
+        {detail.address && (
+          <p className="text-[14px]" style={{ color: "#6d7882" }}>
+            {detail.address}
+          </p>
+        )}
+        {detail.overview && (
+          <p
+            className={`mt-[8px] text-[14px] leading-relaxed ${expanded ? "" : "line-clamp-3"}`}
+            style={{ color: "#1e2124" }}
+          >
+            {detail.overview}
+          </p>
+        )}
+        <div className="mt-[10px] flex flex-wrap items-center gap-[8px]">
+          {hasLongOverview && (
+            <Button
+              type="button"
+              variant="secondary"
+              size="small"
+              onClick={() => setExpanded((v) => !v)}
+            >
+              {expanded ? "접기" : "더보기"}
+            </Button>
+          )}
+          {detail.homepage && (
+            <a
+              href={detail.homepage}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-[14px] font-medium underline"
+              style={{ color: KRDS_PRIMARY_50 }}
+            >
+              공식 홈페이지 ↗
+            </a>
+          )}
+        </div>
+      </div>
+    </div>
   );
 }
 

@@ -120,6 +120,23 @@ layer(krds);`) and pulls in Tailwind _without_ preflight (`tailwindcss/theme.css
   differently on purpose here. Category filtering (관광지/숙박/음식 대분류, `rlteCtgryLclsNm`) is done
   client-side in `RelatedSpotList` (`src/app/page.tsx`) against the already-fetched ~50-item list —
   no separate category API call.
+- **`KorService2` `searchKeyword2`/`detailCommon2` (F2 상세 보강, 무료 — `TOURAPI_DETAIL_*`).**
+  `src/lib/tourapi/detail.ts`'s `fetchSpotDetail` enriches the *selected hub spot* with 대표이미지·
+  개요·홈페이지·주소. The hub/congestion/related services share no `contentId` with TourAPI, so it
+  resolves by name: `searchKeyword2(hubTatsNm)` → candidates, then picks the one **nearest to the
+  hub's `mapX/mapY`** (coord disambiguation) and confirms `detailCommon2` for overview/homepage.
+  Three non-obvious guards, each earning its keep — don't remove them: (1) **exact-title preference**
+  before coord-nearest, because `searchKeyword2("경복궁")` also returns same-coord events like
+  "경복궁 별빛야행" that a pure nearest-pick would grab; (2) **slash-keyword variants** — hub names
+  disambiguate branches with `/` ("국립현대미술관/서울관") but TourAPI uses spaces, so it retries
+  `/`→space then the pre-slash head, and coord-nearest then selects the right branch (→"국립현대미술관
+  서울"); (3) a **`MAX_MATCH_KM` (2.5km) distance guard** that returns `null` rather than show a
+  wrong far-away same-name place (enrichment follows F2's "wrong data is worse than none"). Also
+  normalize `firstimage` `http://`→`https://` (the CDN mixes both; `next.config.ts` only whitelists
+  `https` `tong.visitkorea.or.kr` for `next/image`). This is pure enrichment: `fetchSpotDetail`
+  swallows all errors to `null`, `/api/spot-detail` always returns 200 `{ detail }`, and the F2 card
+  renders only when `detail` is non-null — a miss never blocks the core flow, so it has no static
+  fallback snapshot (unlike hub/congestion/related).
 
 ## PRD-driven architecture (per `PRD_TimeShift.md`)
 
