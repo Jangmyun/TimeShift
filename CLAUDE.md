@@ -17,13 +17,26 @@ all three activate together when a hub spot card is clicked. F4–F7 are not yet
 ## Commands
 
 ```bash
-npm run dev      # start dev server (Turbopack) at http://localhost:3000
-npm run build    # production build — also the fastest way to typecheck the whole app
-npm run start    # run a production build
-npm run lint     # eslint (flat config, eslint.config.mjs)
+npm run dev        # start dev server (Turbopack) at http://localhost:3000
+npm run build      # production build — also the fastest way to typecheck the whole app
+npm run start      # run a production build
+npm run lint       # eslint (flat config, eslint.config.mjs)
+npm test           # vitest run (component + unit tests, jsdom)
+npm run test:watch # vitest watch mode
 ```
 
-There is no test runner configured yet. If tests are added, update this section.
+**Testing (Vitest + React Testing Library + jsdom).** Config in `vitest.config.ts`
+(`@vitejs/plugin-react`, `@/*`→`src/*` alias, `css: false`), globals off — import
+`{ describe, it, expect, vi }` from `"vitest"` in each spec. `vitest.setup.ts` registers
+jest-dom matchers via `import "@testing-library/jest-dom/vitest"`; because that setup file is
+in the tsconfig include, the matcher type augmentation applies project-wide, so `npm run build`
+type-checks specs without a separate `types` entry. Tests live next to source as `*.test.ts(x)`
+(`src/**`). Existing coverage: `CongestionChart` (SVG chart states), `SpotMap` (no-key fallback —
+`vi.stubEnv` forces the empty-key path), `SiteFooter` (krds-react renders in jsdom), and
+`findRecommendedWindow` (pure logic). krds-react renders fine under jsdom (the RSC
+`createContext` limitation only bites at Next build time, not in the client-React test env).
+Note when testing components with browser-only deps: `SpotMap`'s Kakao SDK path needs
+`window.kakao` mocked; only the fallback branch is covered so far.
 
 ## Architecture
 
