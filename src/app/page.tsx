@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import {
   Select,
@@ -91,6 +91,10 @@ export default function Home() {
   const [detail, setDetail] = useState<DetailState>({ status: "idle" });
   // STEP2 목록 "상위 8개만 / 전체" 토글.
   const [showAllSpots, setShowAllSpots] = useState(false);
+  // 지역/관광지 전환 시퀀스. 빠르게 다른 지역·관광지를 고르면 이전 선택의 느린 응답이 나중에
+  // 도착해 엉뚱한 화면을 덮어쓸 수 있어(stale response), 각 비동기 응답이 자기 seq가 여전히
+  // 최신일 때만 상태를 반영하도록 가드한다.
+  const navSeqRef = useRef(0);
 
   const sigunguOptions = useMemo(
     () => REGIONS.find((r) => r.areaCd === areaCd)?.sigungu ?? [],
@@ -98,6 +102,7 @@ export default function Home() {
   );
 
   async function handleSearch(nextAreaCd: string, nextSignguCd: string) {
+    const seq = ++navSeqRef.current;
     setState({ status: "loading" });
     setSelectedSpot(null);
     setCongestion({ status: "idle" });
@@ -107,6 +112,7 @@ export default function Home() {
         `/api/hub-spots?areaCd=${nextAreaCd}&signguCd=${nextSignguCd}`,
       );
       const data = await res.json();
+      if (seq !== navSeqRef.current) return; // 더 최신 전환이 있었음 → 무시.
       if (!res.ok) {
         setState({ status: "error", message: data.error ?? "조회 실패" });
         return;
@@ -117,11 +123,13 @@ export default function Home() {
       }
       setState({ status: "success", items: data.items, baseYm: data.baseYm });
     } catch {
+      if (seq !== navSeqRef.current) return;
       setState({ status: "error", message: "네트워크 오류가 발생했습니다." });
     }
   }
 
   async function handleSelectSpot(spot: HubSpot) {
+    const seq = ++navSeqRef.current;
     setSelectedSpot(spot);
     setCongestion({ status: "loading" });
     setRelated({ status: "loading" });
@@ -139,8 +147,10 @@ export default function Home() {
           `/api/spot-detail?spotName=${encodeURIComponent(spot.hubTatsNm)}&mapX=${encodeURIComponent(spot.mapX)}&mapY=${encodeURIComponent(spot.mapY)}`,
         );
         const data = await res.json();
+        if (seq !== navSeqRef.current) return;
         setDetail({ status: "done", detail: res.ok ? data.detail : null });
       } catch {
+        if (seq !== navSeqRef.current) return;
         setDetail({ status: "done", detail: null });
       }
     })();
@@ -151,6 +161,7 @@ export default function Home() {
           `/api/congestion?areaCd=${spot.areaCd}&signguCd=${spot.signguCd}&spotName=${encodeURIComponent(spot.hubTatsNm)}`,
         );
         const data = await res.json();
+        if (seq !== navSeqRef.current) return;
         if (!res.ok) {
           setCongestion({ status: "error", message: data.error ?? "조회 실패" });
           return;
@@ -165,6 +176,7 @@ export default function Home() {
           recommended: data.recommended,
         });
       } catch {
+        if (seq !== navSeqRef.current) return;
         setCongestion({
           status: "error",
           message: "네트워크 오류가 발생했습니다.",
@@ -178,6 +190,7 @@ export default function Home() {
           `/api/related-spots?areaCd=${spot.areaCd}&signguCd=${spot.signguCd}&tAtsCd=${spot.hubTatsCd}`,
         );
         const data = await res.json();
+        if (seq !== navSeqRef.current) return;
         if (!res.ok) {
           setRelated({ status: "error", message: data.error ?? "조회 실패" });
           return;
@@ -188,6 +201,7 @@ export default function Home() {
         }
         setRelated({ status: "success", items: data.items });
       } catch {
+        if (seq !== navSeqRef.current) return;
         setRelated({
           status: "error",
           message: "네트워크 오류가 발생했습니다.",
@@ -201,6 +215,7 @@ export default function Home() {
   async function handleParseCondition() {
     const text = conditionText.trim();
     if (!text || related.status !== "success") return;
+    const seq = navSeqRef.current; // 파싱 도중 관광지가 바뀌면 결과를 버린다.
     const availableCategories = Array.from(
       new Set(related.items.map((i) => i.rlteCtgryLclsNm)),
     );
@@ -212,6 +227,7 @@ export default function Home() {
         body: JSON.stringify({ text, availableCategories }),
       });
       const data = await res.json();
+      if (seq !== navSeqRef.current) return;
       setCategoryFilter(
         Array.isArray(data.categories) && data.categories.length > 0
           ? data.categories[0]
@@ -221,7 +237,7 @@ export default function Home() {
     } catch {
       // 폴백: 기존 버튼 필터 유지, 아무 것도 바꾸지 않음.
     } finally {
-      setParsing(false);
+      setParsing(false); // 스피너는 항상 해제(멈춤 방지).
     }
   }
 
