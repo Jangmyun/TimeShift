@@ -32,11 +32,16 @@ jest-dom matchers via `import "@testing-library/jest-dom/vitest"`; because that 
 in the tsconfig include, the matcher type augmentation applies project-wide, so `npm run build`
 type-checks specs without a separate `types` entry. Tests live next to source as `*.test.ts(x)`
 (`src/**`). Existing coverage: `CongestionChart` (SVG chart states), `SpotMap` (no-key fallback —
-`vi.stubEnv` forces the empty-key path), `SiteFooter` (krds-react renders in jsdom), and
-`findRecommendedWindow` (pure logic). krds-react renders fine under jsdom (the RSC
-`createContext` limitation only bites at Next build time, not in the client-React test env).
-Note when testing components with browser-only deps: `SpotMap`'s Kakao SDK path needs
-`window.kakao` mocked; only the fallback branch is covered so far.
+`vi.stubEnv` forces the empty-key path), `SiteFooter` (krds-react renders in jsdom),
+`SpotDetailCard` (conditional image/homepage, overview 더보기 toggle), `RelatedSpotList` (category
++ keyword filtering, callback wiring), and `findRecommendedWindow` (pure logic). krds-react renders
+fine under jsdom (the RSC `createContext` limitation only bites at Next build time, not in the
+client-React test env). Two mocking notes: `SpotMap`'s Kakao SDK path needs `window.kakao` mocked
+(only the fallback branch is covered so far); `next/image` is `vi.mock`ed to a plain `<img>` in
+`SpotDetailCard.test.tsx` since the optimizer loader isn't available outside the Next runtime. The
+presentational cards (`SpotDetailCard`, `RelatedSpotList`) were pulled out of `page.tsx` into their
+own `src/components/*` files precisely so they're renderable in isolation — keep new
+testable-in-isolation UI as its own component rather than inlining it in the page.
 
 ## Architecture
 

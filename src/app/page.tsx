@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import Image from "next/image";
 import {
   Select,
   Badge,
@@ -18,6 +17,8 @@ import type { RelatedSpot } from "@/lib/tourapi/relatedSpots";
 import type { SpotDetail } from "@/lib/tourapi/detail";
 import { CongestionChart } from "@/components/CongestionChart";
 import { SpotMap } from "@/components/SpotMap";
+import { SpotDetailCard } from "@/components/SpotDetailCard";
+import { RelatedSpotList } from "@/components/RelatedSpotList";
 
 type FetchState =
   | { status: "idle" }
@@ -789,160 +790,5 @@ export default function Home() {
         </div>
       )}
     </main>
-  );
-}
-
-// 상세정보 보강 카드(F2): 대표이미지 + 주소 + 개요(더보기 토글) + 홈페이지 링크.
-function SpotDetailCard({ detail }: { detail: SpotDetail }) {
-  const [expanded, setExpanded] = useState(false);
-  const hasLongOverview = (detail.overview?.length ?? 0) > 140;
-  return (
-    <div className="mt-4 flex flex-col gap-[16px] sm:flex-row">
-      {detail.image && (
-        <Image
-          src={detail.image}
-          alt={detail.title}
-          width={220}
-          height={160}
-          // 표시 크기는 모바일 전폭, 데스크톱 220px → 그에 맞는 변형만 받도록 sizes 지정.
-          sizes="(max-width: 640px) 100vw, 220px"
-          className="h-[160px] w-full rounded-[10px] object-cover sm:w-[220px]"
-          style={{ border: `1px solid ${KRDS_BORDER_DEFAULT}` }}
-        />
-      )}
-      <div className="flex-1">
-        {detail.address && (
-          <p className="text-[14px]" style={{ color: "#6d7882" }}>
-            {detail.address}
-          </p>
-        )}
-        {detail.overview && (
-          <p
-            className={`mt-[8px] text-[14px] leading-relaxed ${expanded ? "" : "line-clamp-3"}`}
-            style={{ color: "#1e2124" }}
-          >
-            {detail.overview}
-          </p>
-        )}
-        <div className="mt-[10px] flex flex-wrap items-center gap-[8px]">
-          {hasLongOverview && (
-            <Button
-              type="button"
-              variant="secondary"
-              size="small"
-              onClick={() => setExpanded((v) => !v)}
-            >
-              {expanded ? "접기" : "더보기"}
-            </Button>
-          )}
-          {detail.homepage && (
-            <a
-              href={detail.homepage}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-[14px] font-medium underline"
-              style={{ color: KRDS_PRIMARY_50 }}
-            >
-              공식 홈페이지 ↗
-            </a>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function RelatedSpotList({
-  items,
-  categoryFilter,
-  onCategoryChange,
-  keywords,
-  onClearKeywords,
-}: {
-  items: RelatedSpot[];
-  categoryFilter: string;
-  onCategoryChange: (cat: string) => void;
-  keywords: string[];
-  onClearKeywords: () => void;
-}) {
-  const categories = useMemo(
-    () => Array.from(new Set(items.map((i) => i.rlteCtgryLclsNm))),
-    [items],
-  );
-  const filtered = useMemo(() => {
-    let list = categoryFilter
-      ? items.filter((i) => i.rlteCtgryLclsNm === categoryFilter)
-      : items;
-    // F4 키워드: 중/소분류·이름에 부분일치(하나라도 맞으면 통과). 매칭 결과가 0이면 너무
-    // 좁힌 것이므로 카테고리 필터 결과로 되돌린다(데모에서 빈 목록 방지).
-    if (keywords.length > 0) {
-      const byKeyword = list.filter((i) => {
-        const haystack =
-          `${i.rlteTatsNm} ${i.rlteCtgryMclsNm} ${i.rlteCtgrySclsNm}`.toLowerCase();
-        return keywords.some((k) => haystack.includes(k.toLowerCase()));
-      });
-      if (byKeyword.length > 0) list = byKeyword;
-    }
-    return list;
-  }, [items, categoryFilter, keywords]);
-
-  return (
-    <div className="mt-4">
-      <div className="flex flex-wrap items-center gap-[8px]">
-        <Button
-          type="button"
-          variant={categoryFilter === "" ? "primary" : "secondary"}
-          size="small"
-          onClick={() => onCategoryChange("")}
-        >
-          전체
-        </Button>
-        {categories.map((cat) => (
-          <Button
-            key={cat}
-            type="button"
-            variant={categoryFilter === cat ? "primary" : "secondary"}
-            size="small"
-            onClick={() => onCategoryChange(cat)}
-          >
-            {cat}
-          </Button>
-        ))}
-        {keywords.length > 0 && (
-          <button
-            type="button"
-            onClick={onClearKeywords}
-            className="ml-1 inline-flex items-center gap-1"
-          >
-            <Badge variant="filled" color="secondary" size="small" rounded>
-              키워드: {keywords.join(", ")} ✕
-            </Badge>
-          </button>
-        )}
-      </div>
-
-      <ul className="mt-4 grid grid-cols-1 gap-[12px] sm:grid-cols-2">
-        {filtered.map((spot) => (
-          <li
-            key={spot.rlteTatsCd}
-            className="rounded-lg border p-[16px]"
-            style={{ borderColor: KRDS_BORDER_DEFAULT }}
-          >
-            <div className="flex items-center justify-between">
-              <Badge variant="filled" color="secondary" size="small" rounded>
-                연관 {spot.rlteRank}위
-              </Badge>
-              <Badge variant="outline" color="gray" size="small">
-                {spot.rlteCtgryLclsNm} · {spot.rlteCtgryMclsNm}
-              </Badge>
-            </div>
-            <h3 className="mt-2 font-semibold">{spot.rlteTatsNm}</h3>
-            <p className="text-[14px] text-gray-500">
-              {spot.rlteRegnNm} {spot.rlteSignguNm}
-            </p>
-          </li>
-        ))}
-      </ul>
-    </div>
   );
 }
