@@ -16,9 +16,10 @@ import type { CongestionDay, RecommendedWindow } from "@/lib/tourapi/congestion"
 import type { RelatedSpot } from "@/lib/tourapi/relatedSpots";
 import type { SpotDetail } from "@/lib/tourapi/detail";
 import { CongestionChart } from "@/components/CongestionChart";
-import { SpotMap } from "@/components/SpotMap";
+import { SpotMap, type CourseReport } from "@/components/SpotMap";
 import { SpotDetailCard } from "@/components/SpotDetailCard";
 import { RelatedSpotList } from "@/components/RelatedSpotList";
+import type { CityCongestion } from "@/lib/seoul/cityCongestion";
 
 type FetchState =
   | { status: "idle" }
@@ -57,6 +58,17 @@ type DetailState =
   | { status: "loading" }
   | { status: "done"; detail: SpotDetail | null };
 
+// 최소 이동 동선(그래프): SpotMap이 브라우저 지오코딩 좌표로 계산해 콜백으로 올려준다.
+// 지도를 못 그리면 null 코스가 보고된다(날짜 축만으로 degrade).
+type CourseState =
+  | { status: "idle" }
+  | { status: "done"; course: CourseReport | null };
+
+// 서울 핫스팟 시간대별 혼잡(citydata). 미커버 지역은 hourly=null(날짜 축만).
+type CityCongState =
+  | { status: "idle" }
+  | { status: "done"; hourly: CityCongestion | null };
+
 // krds-react design tokens (.claude/skills/krds-design/references/design-tokens.md).
 // Card containers have no krds-react component equivalent, so their border/background
 // colors are pulled from the real KRDS palette instead of default Tailwind grays/blues.
@@ -72,6 +84,24 @@ const TOP_N = 8;
 // 연관 관광지가 없을 때 SpotMap에 넘길 안정적인 빈 배열. 매 렌더마다 `[]` 리터럴을 만들면
 // 참조가 바뀌어 SpotMap의 init effect(deps에 related)가 재실행 → 지도 전체를 다시 그린다.
 const EMPTY_RELATED: RelatedSpot[] = [];
+
+// 서울 citydata 혼잡도 4단계 → 배지 색/표시. 값이 낮을수록 한적.
+const CONGEST_STYLE: Record<string, { color: string; bg: string }> = {
+  여유: { color: "#1a7f37", bg: "#e7f5ec" },
+  보통: { color: "#256ef4", bg: "#ecf2fe" },
+  "약간 붐빔": { color: "#b54708", bg: "#fdf0e6" },
+  붐빔: { color: "#d1293d", bg: "#fdecee" },
+};
+
+/** "YYYY-MM-DD HH:mm" → "오전/오후 h시경". */
+function formatSlot(time: string): string {
+  const m = /(\d{1,2}):\d{2}/.exec(time);
+  if (!m) return time;
+  const h = Number(m[1]);
+  const ampm = h < 12 ? "오전" : "오후";
+  const h12 = h % 12 === 0 ? 12 : h % 12;
+  return `${ampm} ${h12}시경`;
+}
 
 export default function Home() {
   const [areaCd, setAreaCd] = useState<string>("");
@@ -90,6 +120,8 @@ export default function Home() {
   const [parsing, setParsing] = useState(false);
   const [summary, setSummary] = useState<SummaryState>({ status: "idle" });
   const [detail, setDetail] = useState<DetailState>({ status: "idle" });
+  const [course, setCourse] = useState<CourseState>({ status: "idle" });
+  const [cityCong, setCityCong] = useState<CityCongState>({ status: "idle" });
   // STEP2 목록 "상위 8개만 / 전체" 토글.
   const [showAllSpots, setShowAllSpots] = useState(false);
   // 지역/관광지 전환 시퀀스. 빠르게 다른 지역·관광지를 고르면 이전 선택의 느린 응답이 나중에
@@ -135,11 +167,28 @@ export default function Home() {
     setCongestion({ status: "loading" });
     setRelated({ status: "loading" });
     setDetail({ status: "loading" });
-    // 새 관광지를 고르면 이전 F4 조건/필터·F5 요약을 초기화.
+    // 새 관광지를 고르면 이전 F4 조건/필터·F5 요약·동선·시간대 혼잡을 초기화.
     setCategoryFilter("");
     setKeywords([]);
     setConditionText("");
     setSummary({ status: "idle" });
+    setCourse({ status: "idle" });
+    setCityCong({ status: "idle" });
+
+    // 서울 핫스팟 시간대별 혼잡(실시간 + 12h 예측). 미커버·실패 시 hourly=null(날짜 축만).
+    void (async () => {
+      try {
+        const res = await fetch(
+          `/api/city-congestion?spotName=${encodeURIComponent(spot.hubTatsNm)}&mapX=${encodeURIComponent(spot.mapX)}&mapY=${encodeURIComponent(spot.mapY)}`,
+        );
+        const data = await res.json();
+        if (seq !== navSeqRef.current) return;
+        setCityCong({ status: "done", hourly: res.ok ? data.hourly : null });
+      } catch {
+        if (seq !== navSeqRef.current) return;
+        setCityCong({ status: "done", hourly: null });
+      }
+    })();
 
     // 상세정보 보강(F2): 이미지·개요·홈페이지. 실패해도 코어 플로우 무영향 → done+null로 흡수.
     void (async () => {
@@ -248,20 +297,27 @@ export default function Home() {
     congestion.status === "success" || congestion.status === "empty";
   const relatedSettled =
     related.status === "success" || related.status === "empty";
+  // 동선(그래프)·시간대 혼잡이 모두 준비돼야 서사가 나열이 아닌 코스가 된다. 지도를 못 그리거나
+  // 미커버 지역이면 각각 null로 settled 처리돼(SpotMap이 null 코스 보고, city-congestion이 hourly:null)
+  // 날짜 축만으로 자연스럽게 degrade한다.
+  const courseSettled = course.status === "done";
+  const citySettled = cityCong.status === "done";
   const appliedCondition = keywords.length > 0 ? keywords.join(", ") : "";
 
   useEffect(() => {
-    if (!selectedSpot || !congestionSettled || !relatedSettled) return;
+    if (
+      !selectedSpot ||
+      !congestionSettled ||
+      !relatedSettled ||
+      !courseSettled ||
+      !citySettled
+    )
+      return;
 
     const recommended =
       congestion.status === "success" ? congestion.recommended : null;
-    const relatedSpots =
-      related.status === "success"
-        ? related.items.slice(0, 5).map((i) => ({
-            name: i.rlteTatsNm,
-            category: i.rlteCtgryLclsNm,
-          }))
-        : [];
+    const courseData = course.status === "done" ? course.course : null;
+    const hourly = cityCong.status === "done" ? cityCong.hourly : null;
 
     let cancelled = false;
     // 데이터가 모두 도착한 시점에 로딩 표시로 전환하는 의도적 set-state.
@@ -276,7 +332,14 @@ export default function Home() {
             spotName: selectedSpot.hubTatsNm,
             regionName: `${selectedSpot.areaNm} ${selectedSpot.signguNm}`,
             recommended,
-            relatedSpots,
+            course: courseData?.stops ?? [],
+            totalDistanceKm: courseData?.totalDistanceKm ?? 0,
+            currentCongestion: hourly
+              ? { level: hourly.current.level, message: hourly.current.message }
+              : null,
+            bestTimeSlot: hourly?.bestSlot
+              ? { time: hourly.bestSlot.time, level: hourly.bestSlot.level }
+              : null,
             condition: appliedCondition,
           }),
         });
@@ -303,8 +366,12 @@ export default function Home() {
     selectedSpot,
     congestion,
     related,
+    course,
+    cityCong,
     congestionSettled,
     relatedSettled,
+    courseSettled,
+    citySettled,
     appliedCondition,
   ]);
 
@@ -589,6 +656,64 @@ export default function Home() {
                 series={congestion.series}
                 recommended={congestion.recommended}
               />
+              {/* 서울 핫스팟 시간대별 혼잡(citydata): 현재 실시간 혼잡도 + 오늘 예측 최저 시간대.
+                  집중률(날짜 축)이 "어느 날"을 알려준다면 이건 "몇 시"를 더한다. 미커버 지역은
+                  렌더되지 않아 날짜 축만 남는다(정직한 degrade). */}
+              {(() => {
+                const hourly =
+                  cityCong.status === "done" ? cityCong.hourly : null;
+                if (!hourly) return null;
+                const s =
+                  CONGEST_STYLE[hourly.current.level] ?? CONGEST_STYLE["보통"];
+                return (
+                  <div
+                    className="mt-[16px] rounded-[10px] p-[14px]"
+                    style={{
+                      backgroundColor: "#f4f5f6",
+                      border: "1px solid #e6e8ea",
+                    }}
+                  >
+                    <div className="flex flex-wrap items-center gap-x-[10px] gap-y-[6px]">
+                      <span
+                        className="inline-flex items-center gap-[6px] rounded-full px-[10px] py-[3px] text-[13px] font-semibold"
+                        style={{ color: s.color, backgroundColor: s.bg }}
+                      >
+                        <span
+                          className="h-[7px] w-[7px] rounded-full"
+                          style={{ backgroundColor: s.color }}
+                        />
+                        실시간 {hourly.current.level}
+                      </span>
+                      <span
+                        className="text-[13px]"
+                        style={{ color: "#6d7882" }}
+                      >
+                        {hourly.areaNm} · 서울 실시간 도시데이터 기준
+                      </span>
+                    </div>
+                    {hourly.current.message && (
+                      <p
+                        className="mt-[8px] text-[14px] leading-relaxed"
+                        style={{ color: "#1e2124" }}
+                      >
+                        {hourly.current.message}
+                      </p>
+                    )}
+                    {hourly.bestSlot && (
+                      <p
+                        className="mt-[8px] text-[14px]"
+                        style={{ color: "#1e2124" }}
+                      >
+                        오늘 예측상 가장 한적한 시간대:{" "}
+                        <b style={{ color: KRDS_PRIMARY_50 }}>
+                          {formatSlot(hourly.bestSlot.time)}
+                        </b>{" "}
+                        ({hourly.bestSlot.level})
+                      </p>
+                    )}
+                  </div>
+                );
+              })()}
               {/* F6 — 인센티브 배지 목업(정적). 추천 방문 구간이 있을 때만, 그 구간에
                   방문 시 제휴 혜택을 준다는 티저를 보여준다. 실제 발급/결제 로직 없음
                   (PRD Out-of-scope) — ContextualHelp 팝오버로 "시연용"임을 명확히 안내. */}
@@ -728,6 +853,7 @@ export default function Home() {
               recommended={
                 congestion.status === "success" ? congestion.recommended : null
               }
+              onCourse={(c) => setCourse({ status: "done", course: c })}
             />
           </div>
         )}

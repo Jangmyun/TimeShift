@@ -9,10 +9,13 @@ tourist spot instead of suggesting a different spot. Built for the 2026 관광�
 (tourism data contest), 웹·앱 구현 부문 지정과제 2번. Full requirements are in `PRD_TimeShift.md` —
 read it before implementing any feature; this doc only covers engineering setup.
 
-The app is a Next.js (App Router) project scaffolded fresh for this contest. As of this writing,
-F1 (region select → hub tourist-spot list), F2 (30-day congestion forecast chart), and F3
-(related/alternative spot recommendations with category filter) are implemented end-to-end —
-all three activate together when a hub spot card is clicked. F4–F7 are not yet built.
+The app is a Next.js (App Router) project scaffolded fresh for this contest. F1–F5 and F7 are
+implemented end-to-end — region select → hub list (F1), 30-day congestion chart (F2), related-spot
+recommendations with category filter (F3), free-text NL condition parsing (F4), the LLM course
+narrative (F5), and the Kakao map (F7) — all activating together when a hub spot card is clicked. On
+top of these, a **client-side route graph** (minimal-travel course) and a **Seoul time-of-day
+congestion axis** (`citydata`) feed the F5 narrative (see the route/time-of-day section below). F6 is
+a static incentive-badge mockup; real coupon/payment integration is out of scope.
 
 ## Commands
 
@@ -155,6 +158,62 @@ layer(krds);`) and pulls in Tailwind _without_ preflight (`tailwindcss/theme.css
   swallows all errors to `null`, `/api/spot-detail` always returns 200 `{ detail }`, and the F2 card
   renders only when `detail` is non-null — a miss never blocks the core flow, so it has no static
   fallback snapshot (unlike hub/congestion/related).
+
+## Route optimization + time-of-day congestion (F5 코스 서사 고도화)
+
+The "TimeShift" thesis is not just **when** (which day) but a **quiet-time course**: visit the hub, then
+walk a minimal-travel route through nearby related spots, timed to the least-crowded slot. Two subsystems
+power this — a **client-side route graph** and a **second (time-of-day) congestion axis** — and both feed
+a rewritten F5 narrative. Before, `/api/summary` fed Gemini only related-spot **names**, so it could only
+enumerate ("just a list of related spots"); now it gets a structured course and narrates a real 동선.
+
+- **Two-axis congestion model.** Nationwide `tatsCnctrRatedList` (F2) is **day-level only** (30-day
+  `cnctrRate`, no hour dimension — PRD §4.3 scopes minute/hour out). The **time-of-day axis** is a second
+  source: **서울시 실시간 도시데이터 `citydata_ppltn`** (서울열린데이터광장, env `SEOUL_CITYDATA_*`), giving
+  real-time congestion (4단계: 여유/보통/약간 붐빔/붐빔) plus an AI **12-hour forecast** for ~116 Seoul
+  hotspots (관광특구·고궁·공원). This axis is **Seoul-hotspot-only**: nationwide spots (부산 해운대, 인천
+  을왕리, non-hotspot Seoul spots) get day-level only and degrade honestly — **no synthetic hourly data**.
+
+- **`src/lib/seoul/cityAreas.ts`** hardcodes a `{AREA_NM, 중심 좌표}` table for the hotspots (same rationale
+  as `regions.ts`'s 법정동코드 table — no confirmed public mapping under the project keys). `resolveCityArea`
+  picks the nearest area within **1.8km** of the hub's `mapX/mapY`, else `null` (= no time-of-day data). It's
+  a **curated subset** (~30 central/tourism 구역), not the full 116 — extend from the live list if a needed
+  area is missing. `AREA_NM` **must exactly match** the registered 구역명 or the call returns no row (verified:
+  both `경복궁` and `광화문·덕수궁` are their own registered areas).
+
+- **`src/lib/seoul/cityCongestion.ts`** `fetchCityCongestion(mapX, mapY)`. Two non-obvious things, **verified
+  against a live call** (PRD §10 pattern — do not "simplify" either away): (1) the Seoul OpenAPI puts the
+  **service key in a path segment**, not a query param — `{ENDPOINT}/{KEY}/json/citydata_ppltn/{start}/{end}/{AREA_NM}`
+  — so it does **not** go through `callTourApi`; (2) the response root **`SeoulRtd.citydata_ppltn` is a direct
+  array** (`[ {AREA_CONGEST_LVL, AREA_CONGEST_MSG, PPLTN_TIME, FCST_PPLTN:[{FCST_TIME, FCST_CONGEST_LVL, …}]} ]`),
+  **not** the `{ row: [...] }` wrapper other Seoul APIs use — the parser accepts both defensively. `bestSlot`
+  = lowest-congestion forecast slot (earliest on ties). Pure enrichment: missing key / uncovered area / any
+  error all return `{ hourly: null }` (never throws); `/api/city-congestion` always responds 200 `{ hourly }`
+  (spot-detail pattern). **Caveat:** `bestSlot` comes from the near-term 12h forecast, so pairing it with a
+  later recommended-**date** window is a "이 장소는 대체로 H시경이 한적" generalization, not a per-future-date
+  hourly prediction — keep that framing in UI copy.
+
+- **Route graph (`src/lib/route/`).** `geo.ts` `haversineKm({lng,lat}, …)` generalizes `detail.ts`'s private
+  planar `distKm` (spots can be tens of km apart, so use the sphere), and `parseLngLat` guards a KR bounding
+  box. `graph.ts` `optimizeCourse(hub, others, maxStops=8)` fixes the hub as the start and brute-forces
+  permutations (n≤8 → ≤40320, trivial) to minimize total path travel, selecting the nearest `maxStops` others
+  first. Both pure and unit-tested (`src/lib/route/*.test.ts`).
+
+- **Related-spot coordinates exist only client-side.** `RelatedSpot` has no `mapX/mapY`; `SpotMap` already
+  Kakao-geocodes them (keyword search). So **`SpotMap` owns the course**: after geocoding it calls
+  `optimizeCourse`, draws the route as a Kakao **`Polyline`** with numbered **`CustomOverlay`** badges (①②③),
+  and reports the ordered course up via an **`onCourse` callback** — stored in a **ref** so the parent's
+  function identity doesn't re-trigger the map-init effect (which would re-geocode in a loop). It reports
+  `null` on the no-key / error paths so the parent's "course settled" gate never hangs.
+
+- **F5 rewrite (`src/app/api/summary/route.ts`).** The prompt now receives the **structured course** (visit
+  order + per-leg km), **current congestion**, and **bestTimeSlot**, and is instructed to weave ① 현재 혼잡
+  → ② 추천 날짜(+시간대 데이터가 있으면 시간대) → ③ 최소 동선 코스(동선으로 서술, 이름 나열 금지) → ④ 시간대
+  혜택. `buildFallback` was rewritten the same way (course-based, no bare name list). Provider is still Gemini
+  (`src/lib/llm/gemini.ts`) — unchanged. `src/app/page.tsx` fetches `/api/city-congestion` alongside F2/F3,
+  receives the course via `onCourse`, and **gates the summary POST until course + city-congestion both
+  settle** — both degrade to `null` (no Kakao key / uncovered region), so the gate never deadlocks. It also
+  renders a realtime-congestion + best-time-slot badge under the F2 chart when `hourly` is present.
 
 ## PRD-driven architecture (per `PRD_TimeShift.md`)
 

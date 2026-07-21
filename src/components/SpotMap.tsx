@@ -4,6 +4,30 @@ import { useEffect, useRef, useState } from "react";
 import type { HubSpot } from "@/lib/tourapi/hubSpots";
 import type { RecommendedWindow } from "@/lib/tourapi/congestion";
 import type { RelatedSpot } from "@/lib/tourapi/relatedSpots";
+import { optimizeCourse } from "@/lib/route/graph";
+
+// 최적 동선 결과를 상위(page)로 올려 LLM 코스 서사에 쓰게 한다. 좌표는 브라우저 지오코딩으로만
+// 확보되므로(연관 관광지에 좌표 필드 없음) 계산·리포팅을 SpotMap이 단일 지점으로 담당한다.
+export type CourseStopReport = {
+  name: string;
+  order: number;
+  distanceFromPrevKm: number;
+  category?: string;
+  isHub: boolean;
+};
+export type CourseReport = {
+  stops: CourseStopReport[];
+  totalDistanceKm: number;
+};
+
+// optimizeCourse 노드에 실을 데이터(이름·카테고리·좌표). 폴리라인/번호 오버레이에 좌표가 필요.
+type StopData = {
+  name: string;
+  category?: string;
+  isHub: boolean;
+  lat: number;
+  lng: number;
+};
 
 // F7 — 카카오맵 시각화.
 // 중심 관광지는 hub API가 주는 정확한 mapX/mapY(경위도)로 마커를 찍고, 연관 관광지는
@@ -20,6 +44,8 @@ type KakaoInfoWindow = {
 };
 type KakaoBounds = { extend(latlng: KakaoLatLng): void };
 type KakaoMap = { setBounds(bounds: KakaoBounds): void };
+type KakaoPolyline = { setMap(map: KakaoMap | null): void };
+type KakaoCustomOverlay = { setMap(map: KakaoMap | null): void };
 type KakaoPlacesResult = { x: string; y: string };
 type KakaoPlaces = {
   keywordSearch(
@@ -46,6 +72,20 @@ type KakaoMaps = {
     content: string;
     removable?: boolean;
   }) => KakaoInfoWindow;
+  Polyline: new (options: {
+    path: KakaoLatLng[];
+    strokeWeight?: number;
+    strokeColor?: string;
+    strokeOpacity?: number;
+    strokeStyle?: string;
+  }) => KakaoPolyline;
+  CustomOverlay: new (options: {
+    position: KakaoLatLng;
+    content: string;
+    yAnchor?: number;
+    xAnchor?: number;
+    zIndex?: number;
+  }) => KakaoCustomOverlay;
   event: {
     addListener(
       target: KakaoMarker,
@@ -108,6 +148,17 @@ function escapeHtml(s: string) {
 
 const MAX_RELATED_MARKERS = 8;
 
+// 방문 순번 배지 오버레이 HTML(①②③…). 중심=파랑, 연관=회색으로 구분해 마커 위에 띄운다.
+function orderBadge(order: number, isHub: boolean): string {
+  const bg = isHub ? "#256ef4" : "#4b5563";
+  return (
+    `<div style="transform:translateY(-6px);background:${bg};color:#fff;` +
+    `min-width:20px;height:20px;padding:0 5px;border-radius:10px;display:flex;` +
+    `align-items:center;justify-content:center;font-size:12px;font-weight:700;` +
+    `border:2px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,.35);">${order}</div>`
+  );
+}
+
 // 인포윈도우 하단의 카카오맵 바로가기. `map.kakao.com/link`는 모바일에서 카카오맵 앱을, 데스크톱
 // 에서 카카오맵 웹을 새 탭으로 연다(map=해당 위치 지도, to=길찾기). 이름은 콤마 구조가 깨지지
 // 않도록 encodeURIComponent로 감싼다.
@@ -149,16 +200,28 @@ export function SpotMap({
   spot,
   related,
   recommended,
+  onCourse,
 }: {
   spot: HubSpot;
   related: RelatedSpot[];
   recommended: RecommendedWindow | null;
+  onCourse?: (course: CourseReport | null) => void;
 }) {
   const appKey = process.env.NEXT_PUBLIC_KAKAO_MAP_APP_KEY;
   const containerRef = useRef<HTMLDivElement>(null);
   const [status, setStatus] = useState<"loading" | "ready" | "error">(
     "loading",
   );
+  // onCourse를 deps에 넣으면 부모의 함수 재생성으로 지도가 재초기화(재지오코딩)되므로 ref로 우회.
+  const onCourseRef = useRef(onCourse);
+  useEffect(() => {
+    onCourseRef.current = onCourse;
+  });
+
+  // 지도를 못 그리는 경로(키 미설정)에서도 상위 코스 대기가 풀리도록 null 코스를 1회 보고한다.
+  useEffect(() => {
+    if (!appKey) onCourseRef.current?.(null);
+  }, [appKey, spot]);
 
   useEffect(() => {
     // 키 미설정은 아래 렌더 폴백("지도를 불러올 수 없습니다")이 처리하므로 여기선 조용히 종료.
@@ -168,6 +231,10 @@ export function SpotMap({
 
     let cancelled = false;
     const markers: KakaoMarker[] = [];
+    const overlays: KakaoCustomOverlay[] = [];
+    const geocoded: { data: StopData; coord: { lng: number; lat: number } }[] =
+      [];
+    let polyline: KakaoPolyline | null = null;
     // 관광지 전환 시 로딩 표시로 되돌린다.
     setStatus("loading");
 
@@ -178,6 +245,7 @@ export function SpotMap({
         const lng = Number(spot.mapX);
         if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
           setStatus("error");
+          onCourseRef.current?.(null);
           return;
         }
 
@@ -208,13 +276,65 @@ export function SpotMap({
         let pending = topRelated.length;
         const ps = new maps.services.Places();
 
+        // 지오코딩이 모두 끝난 뒤 최소 이동 동선을 계산해 폴리라인·번호배지를 그리고 상위로 보고.
+        const renderCourse = () => {
+          if (cancelled) return;
+          const hubNode = {
+            data: {
+              name: spot.hubTatsNm,
+              category: spot.hubCtgryLclsNm,
+              isHub: true,
+              lat,
+              lng,
+            },
+            coord: { lng, lat },
+          };
+          const course = optimizeCourse<StopData>(hubNode, geocoded);
+          if (course.stops.length >= 2) {
+            const path = course.stops.map(
+              (s) => new maps.LatLng(s.data.lat, s.data.lng),
+            );
+            polyline = new maps.Polyline({
+              path,
+              strokeWeight: 4,
+              strokeColor: "#256ef4",
+              strokeOpacity: 0.85,
+              strokeStyle: "solid",
+            });
+            polyline.setMap(map);
+          }
+          course.stops.forEach((s) => {
+            const ov = new maps.CustomOverlay({
+              position: new maps.LatLng(s.data.lat, s.data.lng),
+              content: orderBadge(s.order, s.data.isHub),
+              yAnchor: 2.4,
+              xAnchor: 0.5,
+              zIndex: 5,
+            });
+            ov.setMap(map);
+            overlays.push(ov);
+          });
+          onCourseRef.current?.({
+            stops: course.stops.map((s) => ({
+              name: s.data.name,
+              order: s.order,
+              distanceFromPrevKm: s.distanceFromPrevKm,
+              category: s.data.category,
+              isHub: s.data.isHub,
+            })),
+            totalDistanceKm: course.totalDistanceKm,
+          });
+        };
+
         const finish = () => {
           if (cancelled) return;
           // 연관 마커가 하나라도 붙었으면 전체를 담도록 뷰포트 조정(단일 지점이면 확대 과함 방지).
           if (extended > 1) map.setBounds(bounds);
+          renderCourse();
         };
 
         if (topRelated.length === 0) {
+          renderCourse();
           setStatus("ready");
         } else {
           topRelated.forEach((r) => {
@@ -235,6 +355,16 @@ export function SpotMap({
                   extended += 1;
                   const rLat = Number(data[0].y);
                   const rLng = Number(data[0].x);
+                  geocoded.push({
+                    data: {
+                      name: r.rlteTatsNm,
+                      category: r.rlteCtgryLclsNm,
+                      isHub: false,
+                      lat: rLat,
+                      lng: rLng,
+                    },
+                    coord: { lng: rLng, lat: rLat },
+                  });
                   maps.event.addListener(marker, "click", () => {
                     relatedInfo.setContent(
                       `<div style="padding:8px 12px;font-size:13px;line-height:1.5;color:#1e2124;max-width:240px;">` +
@@ -258,12 +388,16 @@ export function SpotMap({
         }
       })
       .catch(() => {
-        if (!cancelled) setStatus("error");
+        if (cancelled) return;
+        setStatus("error");
+        onCourseRef.current?.(null);
       });
 
     return () => {
       cancelled = true;
       markers.forEach((m) => m.setMap(null));
+      overlays.forEach((o) => o.setMap(null));
+      polyline?.setMap(null);
     };
   }, [appKey, spot, related, recommended]);
 
