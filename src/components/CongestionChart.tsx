@@ -46,14 +46,32 @@ export function CongestionChart({
     ? series.findIndex((d) => d.baseYmd === recommended.endYmd)
     : -1;
 
+  // 스크린리더용: SVG 도형은 보조기술에 보이지 않으므로, 실제 데이터를 문장으로 요약해
+  // aria-label/desc에 담는다. 평균·최고 집중률과 추천(최저) 구간을 함께 읽어준다.
+  const avgRate = Math.round(
+    series.reduce((sum, d) => sum + d.cnctrRate, 0) / series.length,
+  );
+  const maxDay = series.reduce((a, b) => (b.cnctrRate > a.cnctrRate ? b : a));
+  const recSentence = recommended
+    ? `가장 한적한 추천 방문 시기는 ${formatMd(recommended.startYmd)}부터 ${formatMd(
+        recommended.endYmd,
+      )}까지로 평균 집중률 ${recommended.avgRate}%입니다.`
+    : "추천 방문 구간이 없습니다.";
+  const chartDesc =
+    `향후 ${series.length}일간 집중률 예측 꺾은선 그래프. ` +
+    `전체 평균 집중률 ${avgRate}%, 가장 붐비는 날은 ${formatMd(maxDay.baseYmd)}로 ${maxDay.cnctrRate}%입니다. ` +
+    recSentence;
+
   return (
     <div className="w-full overflow-x-auto">
       <svg
         viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
         className="w-full min-w-[480px]"
         role="img"
-        aria-label="향후 30일 집중률 예측 그래프"
+        aria-label={chartDesc}
       >
+        <title>{`향후 ${series.length}일 집중률 예측`}</title>
+        <desc>{chartDesc}</desc>
         {[0, 25, 50, 75, 100].map((tick) => (
           <g key={tick}>
             <line

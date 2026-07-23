@@ -482,9 +482,9 @@ export default function Home() {
         </section>
       )}
 
-      <div className="w-full">
+      <div className="w-full" aria-live="polite" aria-busy={state.status === "loading"}>
         {state.status === "loading" && (
-          <div className="flex justify-center py-4">
+          <div className="flex justify-center py-4" role="status">
             <Spinner label="중심 관광지를 불러오는 중..." />
           </div>
         )}
@@ -560,6 +560,7 @@ export default function Home() {
                       <button
                         type="button"
                         onClick={() => handleSelectSpot(spot)}
+                        aria-label={`${spot.hubRank}위 ${spot.hubTatsNm}, ${spot.hubCtgryLclsNm}. 집중률 예측 열기`}
                         className="w-full rounded-[12px] border p-[20px] text-left transition-colors"
                         style={{
                           borderColor: KRDS_BORDER_DEFAULT,
@@ -618,6 +619,8 @@ export default function Home() {
         <div
           className="w-full rounded-[12px] border bg-white p-[24px]"
           style={{ borderColor: KRDS_BORDER_DEFAULT }}
+          aria-live="polite"
+          aria-busy={congestion.status === "loading"}
         >
           <h2 className="text-[19px] font-semibold">
             {selectedSpot.hubTatsNm} · 향후 30일 집중률 예측
@@ -627,7 +630,7 @@ export default function Home() {
             <SpotDetailCard detail={detail.detail} />
           )}
           {congestion.status === "loading" && (
-            <div className="mt-4 flex justify-center">
+            <div className="mt-4 flex justify-center" role="status">
               <Spinner label="집중률 데이터를 불러오는 중..." />
             </div>
           )}
@@ -681,6 +684,7 @@ export default function Home() {
                         <span
                           className="h-[7px] w-[7px] rounded-full"
                           style={{ backgroundColor: s.color }}
+                          aria-hidden="true"
                         />
                         실시간 {hourly.current.level}
                       </span>
