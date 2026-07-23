@@ -729,8 +729,11 @@ export default function Home() {
                     혜택 예정
                   </Badge>
                   <span className="text-[14px]" style={{ color: "#1e2124" }}>
-                    이 추천 방문 시기에 맞춰 방문하면 제휴 할인·우선입장 혜택을 드릴
-                    예정이에요.
+                    이 추천 방문 시기
+                    {cityCong.status === "done" && cityCong.hourly?.bestSlot
+                      ? `, 특히 ${formatSlot(cityCong.hourly.bestSlot.time)}`
+                      : ""}
+                    에 맞춰 방문하면 제휴 할인·우선입장 혜택을 드릴 예정이에요.
                   </span>
                   <ContextualHelp
                     label="자세히"
