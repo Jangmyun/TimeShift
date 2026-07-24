@@ -77,7 +77,11 @@ export function resolveCongestionName(
     congestionNames.filter((c) => {
       const cn = normalizeName(c);
       const [short, long] = hn.length < cn.length ? [hn, cn] : [cn, hn];
-      return short.length >= 4 && long.includes(short) && short.length / long.length >= 0.5;
+      return (
+        short.length >= 4 &&
+        long.includes(short) &&
+        short.length / long.length >= 0.5
+      );
     }),
   );
   return contain;
