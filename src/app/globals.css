@@ -31,3 +31,36 @@ body {
   background: #ffffff;
   color: #1e2124; /* --krds-color-light-gray-90 */
 }
+
+/* 집중률 그래프의 좌우 스크롤바를 KRDS 톤에 맞게 커스텀한다. 기본 브라우저 스크롤바 대신
+ * KRDS gray/primary 토큰을 써서 전체 테마와 이질감이 없도록 한다(Firefox: scrollbar-color,
+ * WebKit/Chromium: ::-webkit-scrollbar 의사요소 — 인라인 스타일이 불가해 클래스로 둔다). */
+.krds-scroll-x {
+  scrollbar-width: thin;
+  scrollbar-color: #b1b8be transparent; /* thumb, track */
+}
+.krds-scroll-x::-webkit-scrollbar {
+  height: 8px;
+}
+.krds-scroll-x::-webkit-scrollbar-track {
+  background: #f4f5f6; /* --krds-color-light-gray-5 */
+  border-radius: 999px;
+}
+.krds-scroll-x::-webkit-scrollbar-thumb {
+  background: #b1b8be; /* --krds-color-light-gray-30 */
+  border-radius: 999px;
+}
+.krds-scroll-x::-webkit-scrollbar-thumb:hover {
+  background: #256ef4; /* --krds-color-light-primary-50 */
+}
+
+/* 카카오맵 SDK가 지도 컨테이너 하위에 직접 그리는 내부 DOM(인포윈도우 말풍선 등)은 브라우저 기본
+ * 박스 계산(box-sizing:content-box, 자체 여백/치수)을 전제로 JS가 높이·너비를 산출한다. 그런데
+ * KRDS 리셋(krds 레이어)이 `div{box-sizing:border-box;margin:0;padding:0}`을 모든 div에 적용하기
+ * 때문에, 이 리셋이 카카오 내부 div까지 물들이면 인포윈도우 높이 계산이 어긋나 하단 링크(카카오맵
+ * 에서 보기·길찾기)가 말풍선 밖으로 흘러나오는 깨짐이 생긴다. 아래 규칙은 unlayered(어떤 레이어
+ * 보다 우선)라 krds 레이어의 리셋을 이기고, 지도 컨테이너 하위를 기본값(content-box)으로 되돌려
+ * SDK 렌더링을 보호한다. 우리 인포윈도우 콘텐츠는 SpotMap.tsx가 인라인으로 치수를 직접 지정한다. */
+.kakao-map-root :where(div, span, a, p, strong, em, img, button) {
+  box-sizing: content-box;
+}

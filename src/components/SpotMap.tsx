@@ -46,7 +46,12 @@ type KakaoBounds = { extend(latlng: KakaoLatLng): void };
 type KakaoMap = { setBounds(bounds: KakaoBounds): void };
 type KakaoPolyline = { setMap(map: KakaoMap | null): void };
 type KakaoCustomOverlay = { setMap(map: KakaoMap | null): void };
-type KakaoPlacesResult = { x: string; y: string };
+type KakaoPlacesResult = {
+  x: string;
+  y: string;
+  place_name?: string;
+  place_url?: string;
+};
 type KakaoPlaces = {
   keywordSearch(
     keyword: string,
@@ -71,6 +76,7 @@ type KakaoMaps = {
   InfoWindow: new (options: {
     content: string;
     removable?: boolean;
+    zIndex?: number;
   }) => KakaoInfoWindow;
   Polyline: new (options: {
     path: KakaoLatLng[];
@@ -159,18 +165,40 @@ function orderBadge(order: number, isHub: boolean): string {
   );
 }
 
+// 연관 관광지 지오코딩용 키워드. rlteTatsNm은 지점을 `/`로 구분(예: `신세계백화점/대구신세계점`,
+// `호텔인터불고/대구`)하는데, 이 슬래시를 그대로 키워드에 넣으면 카카오 keywordSearch가 오검색한다
+// (검증: `동구 신세계백화점/대구신세계점` → 엉뚱한 `배스킨라빈스 대구신세계점`이 1순위). detail.ts의
+// 슬래시 처리와 같은 원리로 **슬래시 앞 본체**만 남기면 지역명+반경 편향으로 올바른 지점이 잡힌다
+// (`동구 신세계백화점` → `신세계백화점 대구점`). 슬래시가 없으면 이름 전체가 그대로 쓰인다.
+function buildSearchKeyword(signgu: string, name: string): string {
+  const head = name.split("/")[0].trim();
+  return `${signgu} ${head}`.trim();
+}
+
 // 인포윈도우 하단의 카카오맵 바로가기. `map.kakao.com/link`는 모바일에서 카카오맵 앱을, 데스크톱
-// 에서 카카오맵 웹을 새 탭으로 연다(map=해당 위치 지도, to=길찾기). 이름은 콤마 구조가 깨지지
-// 않도록 encodeURIComponent로 감싼다.
-function kakaoMapLinks(name: string, lat: number, lng: number): string {
+// 에서 카카오맵 웹을 새 탭으로 연다(map=해당 위치 지도, to=길찾기). `placeUrl`(지오코딩으로 매칭된
+// 실제 장소의 카카오 상세 URL)이 있으면 "보기"는 그 정식 URL을 써서 핀과 정확히 같은 장소를 연다 —
+// 이름으로 map/이름,위경도 URL을 재구성할 때 생길 수 있는 이름/좌표 불일치를 원천 차단한다. 이름은
+// 콤마 구조가 깨지지 않도록 encodeURIComponent로 감싼다.
+function kakaoMapLinks(
+  name: string,
+  lat: number,
+  lng: number,
+  placeUrl?: string,
+): string {
   if (!Number.isFinite(lat) || !Number.isFinite(lng)) return "";
   const n = encodeURIComponent(name);
   const base = "https://map.kakao.com/link";
+  // font-size/line-height를 인라인으로 못박아 카카오 인포윈도우 높이 측정을 결정론적으로 만든다
+  // (KRDS 전역 리셋·웹폰트 스왑에 따른 리플로우로 링크 줄이 밀려나는 것을 방지).
   const linkStyle =
-    "color:#256ef4;font-weight:600;text-decoration:none;white-space:nowrap;";
+    "color:#256ef4;font-weight:600;font-size:13px;line-height:1.5;text-decoration:none;white-space:nowrap;";
+  const viewHref = placeUrl && placeUrl.startsWith("http")
+    ? placeUrl
+    : `${base}/map/${n},${lat},${lng}`;
   return (
-    `<div style="margin-top:8px;padding-top:6px;border-top:1px solid #e6e8ea;display:flex;gap:12px;">` +
-    `<a href="${base}/map/${n},${lat},${lng}" target="_blank" rel="noopener noreferrer" style="${linkStyle}">카카오맵에서 보기</a>` +
+    `<div style="margin-top:8px;padding-top:6px;border-top:1px solid #e6e8ea;display:flex;flex-wrap:nowrap;gap:12px;">` +
+    `<a href="${escapeHtml(viewHref)}" target="_blank" rel="noopener noreferrer" style="${linkStyle}">카카오맵에서 보기</a>` +
     `<a href="${base}/to/${n},${lat},${lng}" target="_blank" rel="noopener noreferrer" style="${linkStyle}">길찾기</a>` +
     `</div>`
   );
@@ -185,7 +213,7 @@ function buildHubContent(
   lng: number,
 ): string {
   return (
-    `<div style="padding:8px 12px;font-size:13px;line-height:1.5;color:#1e2124;max-width:240px;">` +
+    `<div style="padding:8px 12px;font-size:13px;line-height:1.5;color:#1e2124;width:196px;">` +
     `<strong>${escapeHtml(spotName)}</strong><br/>` +
     `<span style="color:#256ef4;">중심 관광지</span>` +
     (recommended
@@ -263,14 +291,21 @@ export function SpotMap({
           title: spot.hubTatsNm,
         });
         markers.push(hubMarker);
+        // zIndex는 번호배지 CustomOverlay(zIndex:5)보다 높게 둬, 열린 인포윈도우가 항상 배지 위에
+        // 올라오도록 한다(그렇지 않으면 배지가 박스의 글자·버튼을 가린다).
         const hubInfo = new maps.InfoWindow({
           content: buildHubContent(spot.hubTatsNm, recommended, lat, lng),
           removable: true, // X 버튼으로 닫기.
+          zIndex: 100,
         });
         hubInfo.open(map, hubMarker);
 
         // 연관 관광지 마커 클릭 시 재사용하는 단일 인포윈도우(동시에 하나만 열리게, X로 닫기).
-        const relatedInfo = new maps.InfoWindow({ content: "", removable: true });
+        const relatedInfo = new maps.InfoWindow({
+          content: "",
+          removable: true,
+          zIndex: 100,
+        });
 
         const topRelated = related.slice(0, MAX_RELATED_MARKERS);
         let pending = topRelated.length;
@@ -339,7 +374,8 @@ export function SpotMap({
         } else {
           topRelated.forEach((r) => {
             // 지역명을 붙여 동명 관광지 오검색을 줄이고, 중심 좌표 반경으로 편향.
-            const keyword = `${r.rlteSignguNm} ${r.rlteTatsNm}`;
+            // 슬래시 지점명은 본체만 남긴다(buildSearchKeyword 주석 참고).
+            const keyword = buildSearchKeyword(r.rlteSignguNm, r.rlteTatsNm);
             ps.keywordSearch(
               keyword,
               (data, searchStatus) => {
@@ -355,6 +391,7 @@ export function SpotMap({
                   extended += 1;
                   const rLat = Number(data[0].y);
                   const rLng = Number(data[0].x);
+                  const rPlaceUrl = data[0].place_url;
                   geocoded.push({
                     data: {
                       name: r.rlteTatsNm,
@@ -367,10 +404,10 @@ export function SpotMap({
                   });
                   maps.event.addListener(marker, "click", () => {
                     relatedInfo.setContent(
-                      `<div style="padding:8px 12px;font-size:13px;line-height:1.5;color:#1e2124;max-width:240px;">` +
+                      `<div style="padding:8px 12px;font-size:13px;line-height:1.5;color:#1e2124;width:196px;">` +
                         `<strong>${escapeHtml(r.rlteTatsNm)}</strong><br/>` +
                         `<span style="color:#6d7882;">${escapeHtml(r.rlteCtgryLclsNm)} · ${escapeHtml(r.rlteCtgryMclsNm)}</span>` +
-                        kakaoMapLinks(r.rlteTatsNm, rLat, rLng) +
+                        kakaoMapLinks(r.rlteTatsNm, rLat, rLng, rPlaceUrl) +
                         `</div>`,
                     );
                     relatedInfo.open(map, marker);
@@ -421,7 +458,7 @@ export function SpotMap({
     <div className="relative w-full">
       <div
         ref={containerRef}
-        className="h-[360px] w-full rounded-[10px]"
+        className="kakao-map-root h-[360px] w-full rounded-[10px]"
         style={{ border: "1px solid #cdd1d5" /* --krds-color-light-gray-20 */ }}
       />
       {status === "loading" && (

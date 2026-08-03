@@ -1,10 +1,14 @@
 "use client";
 
+import { useRef } from "react";
+import { Button } from "krds-react";
 import type { CongestionDay, RecommendedWindow } from "@/lib/tourapi/congestion";
 
-const WIDTH = 640;
 const HEIGHT = 220;
-const PADDING = { top: 16, right: 16, bottom: 28, left: 32 };
+const PADDING = { top: 16, right: 24, bottom: 36, left: 32 };
+// 매일 날짜를 표시하려면 하루당 고정 폭이 필요하다. 40px면 "08/03" 라벨(≈28px)이
+// 겹치지 않고, 30일이면 전체 폭이 컨테이너를 넘어 좌우 스크롤이 생긴다.
+const DAY_STEP = 40;
 
 // krds-react design tokens (references/design-tokens.md) — kept as raw hex since these
 // render inside an <svg>, where CSS custom properties defined on an ancestor still apply
@@ -26,11 +30,14 @@ export function CongestionChart({
   series: CongestionDay[];
   recommended: RecommendedWindow | null;
 }) {
+  const scrollRef = useRef<HTMLDivElement>(null);
+
   if (series.length === 0) return null;
 
-  const plotW = WIDTH - PADDING.left - PADDING.right;
+  const plotW = DAY_STEP * Math.max(series.length - 1, 1);
+  const width = PADDING.left + PADDING.right + plotW;
   const plotH = HEIGHT - PADDING.top - PADDING.bottom;
-  const xStep = plotW / Math.max(series.length - 1, 1);
+  const xStep = DAY_STEP;
 
   const x = (i: number) => PADDING.left + i * xStep;
   const y = (rate: number) => PADDING.top + plotH * (1 - rate / 100);
@@ -62,61 +69,96 @@ export function CongestionChart({
     `전체 평균 집중률 ${avgRate}%, 가장 붐비는 날은 ${formatMd(maxDay.baseYmd)}로 ${maxDay.cnctrRate}%입니다. ` +
     recSentence;
 
+  const scrollBy = (dir: 1 | -1) => {
+    const el = scrollRef.current;
+    if (!el) return;
+    // 한 번에 약 한 화면씩(최소 5일) 이동. 스크롤 컨테이너가 잘려 있어야 의미가 있다.
+    const amount = Math.max(el.clientWidth * 0.8, DAY_STEP * 5);
+    el.scrollBy({ left: dir * amount, behavior: "smooth" });
+  };
+
   return (
-    <div className="w-full overflow-x-auto">
-      <svg
-        viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
-        className="w-full min-w-[480px]"
-        role="img"
-        aria-label={chartDesc}
-      >
-        <title>{`향후 ${series.length}일 집중률 예측`}</title>
-        <desc>{chartDesc}</desc>
-        {[0, 25, 50, 75, 100].map((tick) => (
-          <g key={tick}>
-            <line
-              x1={PADDING.left}
-              x2={WIDTH - PADDING.right}
-              y1={y(tick)}
-              y2={y(tick)}
-              stroke={KRDS_GRAY_10}
-              strokeWidth={1}
+    <div className="w-full">
+      <div className="mb-[8px] flex items-center justify-between gap-[8px]">
+        <span className="text-sm" style={{ color: KRDS_GRAY_40 }}>
+          좌우로 넘겨 30일 전체 날짜를 확인하세요
+        </span>
+        <div className="flex gap-[8px]">
+          <Button
+            type="button"
+            variant="secondary"
+            size="small"
+            onClick={() => scrollBy(-1)}
+            aria-label="이전 날짜 보기"
+          >
+            ← 이전
+          </Button>
+          <Button
+            type="button"
+            variant="secondary"
+            size="small"
+            onClick={() => scrollBy(1)}
+            aria-label="다음 날짜 보기"
+          >
+            다음 →
+          </Button>
+        </div>
+      </div>
+
+      <div ref={scrollRef} className="krds-scroll-x w-full overflow-x-auto">
+        <svg
+          width={width}
+          height={HEIGHT}
+          viewBox={`0 0 ${width} ${HEIGHT}`}
+          style={{ maxWidth: "none" }}
+          role="img"
+          aria-label={chartDesc}
+        >
+          <title>{`향후 ${series.length}일 집중률 예측`}</title>
+          <desc>{chartDesc}</desc>
+          {[0, 25, 50, 75, 100].map((tick) => (
+            <g key={tick}>
+              <line
+                x1={PADDING.left}
+                x2={width - PADDING.right}
+                y1={y(tick)}
+                y2={y(tick)}
+                stroke={KRDS_GRAY_10}
+                strokeWidth={1}
+              />
+              <text x={4} y={y(tick) + 4} fontSize={10} fill={KRDS_GRAY_40}>
+                {tick}
+              </text>
+            </g>
+          ))}
+
+          {recStartIdx >= 0 && recEndIdx >= 0 && (
+            <rect
+              x={x(recStartIdx) - xStep / 2}
+              y={PADDING.top}
+              width={x(recEndIdx) - x(recStartIdx) + xStep}
+              height={plotH}
+              fill={KRDS_PRIMARY_50}
+              fillOpacity={0.1}
             />
-            <text x={4} y={y(tick) + 4} fontSize={10} fill={KRDS_GRAY_40}>
-              {tick}
-            </text>
-          </g>
-        ))}
+          )}
 
-        {recStartIdx >= 0 && recEndIdx >= 0 && (
-          <rect
-            x={x(recStartIdx) - xStep / 2}
-            y={PADDING.top}
-            width={x(recEndIdx) - x(recStartIdx) + xStep}
-            height={plotH}
-            fill={KRDS_PRIMARY_50}
-            fillOpacity={0.1}
-          />
-        )}
+          <path d={linePath} fill="none" stroke={KRDS_PRIMARY_50} strokeWidth={2} />
 
-        <path d={linePath} fill="none" stroke={KRDS_PRIMARY_50} strokeWidth={2} />
+          {series.map((d, i) => {
+            const isRecommended = i >= recStartIdx && i <= recEndIdx && recStartIdx >= 0;
+            return (
+              <circle
+                key={d.baseYmd}
+                cx={x(i)}
+                cy={y(d.cnctrRate)}
+                r={isRecommended ? 3.5 : 2.5}
+                fill={isRecommended ? KRDS_PRIMARY_60 : KRDS_GRAY_30}
+              />
+            );
+          })}
 
-        {series.map((d, i) => {
-          const isRecommended = i >= recStartIdx && i <= recEndIdx && recStartIdx >= 0;
-          if (i % 3 !== 0 && !isRecommended) return null;
-          return (
-            <circle
-              key={d.baseYmd}
-              cx={x(i)}
-              cy={y(d.cnctrRate)}
-              r={isRecommended ? 3 : 2}
-              fill={isRecommended ? KRDS_PRIMARY_60 : KRDS_GRAY_30}
-            />
-          );
-        })}
-
-        {series.map((d, i) =>
-          i % 5 === 0 ? (
+          {series.map((d, i) => (
             <text
               key={`label-${d.baseYmd}`}
               x={x(i)}
@@ -127,19 +169,24 @@ export function CongestionChart({
             >
               {formatMd(d.baseYmd)}
             </text>
-          ) : null,
-        )}
-      </svg>
+          ))}
+        </svg>
+      </div>
 
       {recommended && (
         <p
-          className="mt-2 text-sm font-medium"
+          className="mt-3 text-lg font-semibold"
           style={{ color: KRDS_PRIMARY_60 }}
         >
           추천 방문 시기: {formatMd(recommended.startYmd)} ~{" "}
           {formatMd(recommended.endYmd)} (평균 집중률 {recommended.avgRate}%)
         </p>
       )}
+
+      <p className="mt-2 text-sm" style={{ color: KRDS_GRAY_40 }}>
+        ※ 집중률은 한국관광공사 관광 빅데이터의 관광지별 방문자 추이 예측을 기반으로 산출한
+        값으로, 값이 낮을수록 해당 날짜에 방문자가 적어 한적함을 뜻합니다.
+      </p>
     </div>
   );
 }
