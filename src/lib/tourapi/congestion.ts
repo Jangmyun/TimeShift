@@ -1,3 +1,4 @@
+import { unstable_cache } from "next/cache";
 import { callTourApi } from "./client";
 import { getFallbackCongestion, type FetchSource } from "./fallback";
 
@@ -88,6 +89,23 @@ export function resolveCongestionName(
 }
 
 /**
+ * tatsCnctrRatedList 응답(시/군/구 전체, ~113곳×30일)은 spotName과 무관하게 areaCd/signguCd에만
+ * 의존하므로, 같은 지역에서 스팟을 여러 번 선택해도 매번 재요청하지 않도록 지역 단위로 캐시한다.
+ * (스팟 선택마다 3390행짜리 region 전체 payload를 재조회하던 N+1 패턴 방지.)
+ */
+const fetchRawCongestion = unstable_cache(
+  (areaCd: string, signguCd: string) =>
+    callTourApi<CongestionApiItem>(ENDPOINT, SERVICE_KEY, "tatsCnctrRatedList", {
+      areaCd,
+      signguCd,
+      numOfRows: 5000,
+      pageNo: 1,
+    }),
+  ["tourapi-congestion-region"],
+  { revalidate: 1800 },
+);
+
+/**
  * tatsCnctrRatedList는 관광지 단위 필터 파라미터를 지원하지 않고(날짜/월 파라미터도 없이 오늘부터
  * 향후 30일 예측을 한 번에 반환), 해당 시/군/구 내 모든 관광지 데이터를 돌려준다. 따라서 시/군/구
  * 전체를 한 번에 조회한 뒤, spotName(hub spot의 hubTatsNm)을 congestion 측 이름으로 해석해
@@ -100,12 +118,7 @@ export async function fetchCongestion(
 ): Promise<{ series: CongestionDay[]; source: FetchSource }> {
   let items: CongestionApiItem[];
   try {
-    items = await callTourApi<CongestionApiItem>(
-      ENDPOINT,
-      SERVICE_KEY,
-      "tatsCnctrRatedList",
-      { areaCd, signguCd, numOfRows: 5000, pageNo: 1 },
-    );
+    items = await fetchRawCongestion(areaCd, signguCd);
   } catch (err) {
     // API 실패 시 대표 지역은 정적 캐시로 degrade(데모 안정성). 캐시 없으면 원래 에러 전파.
     const fb = getFallbackCongestion(areaCd, signguCd, spotName);
