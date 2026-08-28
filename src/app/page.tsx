@@ -24,7 +24,10 @@ import {
 } from "@/components/SpotMap";
 import { SpotDetailCard } from "@/components/SpotDetailCard";
 import { RelatedSpotList } from "@/components/RelatedSpotList";
-import { AvoidanceEffectCard } from "@/components/AvoidanceEffectCard";
+import {
+  AvoidanceEffectCard,
+  calculateAvoidanceEffect,
+} from "@/components/AvoidanceEffectCard";
 import { DataSourcePanel } from "@/components/DataSourcePanel";
 import type { CityCongestion } from "@/lib/seoul/cityCongestion";
 
@@ -181,6 +184,14 @@ export default function Home() {
     () =>
       congestion.status === "success"
         ? buildMapCongestionSignal(congestion.series, congestion.recommended)
+        : null,
+    [congestion],
+  );
+
+  const avoidanceEffect = useMemo(
+    () =>
+      congestion.status === "success"
+        ? calculateAvoidanceEffect(congestion.series, congestion.recommended)
         : null,
     [congestion],
   );
@@ -390,6 +401,7 @@ export default function Home() {
             recommended,
             course: courseData?.stops ?? [],
             totalDistanceKm: courseData?.totalDistanceKm ?? 0,
+            avoidanceEffect,
             currentCongestion: hourly
               ? { level: hourly.current.level, message: hourly.current.message }
               : null,
@@ -429,6 +441,7 @@ export default function Home() {
     courseSettled,
     citySettled,
     appliedCondition,
+    avoidanceEffect,
   ]);
 
   return (

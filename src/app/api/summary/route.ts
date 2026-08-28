@@ -18,12 +18,21 @@ type CourseStopBrief = {
   isHub?: boolean;
 };
 
+type AvoidanceEffectEvidence = {
+  peakAvoidPoint: number;
+  averageAvoidPoint: number;
+  recommendedAvgRate: number;
+  peakRate: number;
+  averageRate: number;
+};
+
 type SummaryPayload = {
   spotName?: unknown;
   regionName?: unknown;
   recommended?: { startYmd?: unknown; endYmd?: unknown; avgRate?: unknown } | null;
   course?: unknown;
   totalDistanceKm?: unknown;
+  avoidanceEffect?: unknown;
   currentCongestion?: { level?: unknown; message?: unknown } | null;
   bestTimeSlot?: { time?: unknown; level?: unknown } | null;
   condition?: unknown;
@@ -74,7 +83,66 @@ function circledNumber(n: number): string {
   return circled[n - 1] ?? `${n}.`;
 }
 
-function buildFallback(
+const round1 = (n: number) => Math.round(n * 10) / 10;
+
+function formatPercent(value: number): string {
+  return `${value.toFixed(1)}%`;
+}
+
+function formatPoint(value: number): string {
+  return `${value.toFixed(1)}p`;
+}
+
+function isFiniteNumber(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value);
+}
+
+export function parseAvoidanceEffect(
+  raw: unknown,
+): AvoidanceEffectEvidence | null {
+  if (!raw || typeof raw !== "object") return null;
+  const source = raw as Record<string, unknown>;
+  const peakAvoidPoint = source.peakAvoidPoint;
+  const averageAvoidPoint = source.averageAvoidPoint;
+  const recommendedAvgRate = source.recommendedAvgRate;
+  const peakRate = source.peakRate;
+  const averageRate = source.averageRate;
+
+  if (
+    !isFiniteNumber(peakAvoidPoint) ||
+    !isFiniteNumber(averageAvoidPoint) ||
+    !isFiniteNumber(recommendedAvgRate) ||
+    !isFiniteNumber(peakRate) ||
+    !isFiniteNumber(averageRate)
+  )
+    return null;
+
+  return {
+    peakAvoidPoint: Math.max(0, round1(peakAvoidPoint)),
+    averageAvoidPoint: Math.max(0, round1(averageAvoidPoint)),
+    recommendedAvgRate: round1(recommendedAvgRate),
+    peakRate: round1(peakRate),
+    averageRate: round1(averageRate),
+  };
+}
+
+function evidenceText(
+  evidence: AvoidanceEffectEvidence | null,
+  totalDistanceKm: number,
+): string | null {
+  if (!evidence) return null;
+  const distance =
+    totalDistanceKm > 0 ? `, 추천 코스 총 이동거리 ${totalDistanceKm.toFixed(1)}km` : "";
+  return `추천 구간 평균 집중률 ${formatPercent(evidence.recommendedAvgRate)}로 최고 혼잡일 대비 ${formatPoint(evidence.peakAvoidPoint)}, 30일 평균 대비 ${formatPoint(evidence.averageAvoidPoint)} 낮습니다${distance}.`;
+}
+
+function distanceEvidenceText(totalDistanceKm: number): string {
+  return totalDistanceKm > 0
+    ? `, 추천 코스 총 이동거리 ${totalDistanceKm.toFixed(1)}km`
+    : "";
+}
+
+export function buildFallback(
   spotName: string,
   regionName: string,
   recommended: { startYmd: string; endYmd: string; avgRate: number } | null,
@@ -82,10 +150,12 @@ function buildFallback(
   totalDistanceKm: number,
   currentLevel: string | null,
   bestSlot: string | null,
+  avoidanceEffect: AvoidanceEffectEvidence | null = null,
 ): string {
   const where = regionName ? `${regionName}의 ` : "";
   const when = windowText(recommended);
   const parts: string[] = [];
+  const evidence = evidenceText(avoidanceEffect, totalDistanceKm);
 
   // ① 현재 혼잡 + ② 추천 시기(날짜).
   const nowClause = currentLevel
@@ -93,7 +163,7 @@ function buildFallback(
     : `${where}${spotName}을(를) 여유롭게 둘러보고 싶으시군요.`;
   if (when) {
     parts.push(
-      `${nowClause} 향후 30일 중 ${when}쯤이 가장 한적하니${bestSlot ? ` ${bestSlot} 방문을 추천드려요.` : " 이때 방문을 추천드려요."}`,
+      `${nowClause} 향후 30일 중 ${when}쯤이 가장 한적하니${bestSlot ? ` ${bestSlot} 방문을 추천드려요.` : " 이때 방문을 추천드려요."}${evidence ? ` ${evidence}` : ""}`,
     );
   } else {
     parts.push(nowClause);
@@ -140,6 +210,11 @@ function parseCourse(raw: unknown): CourseStopBrief[] {
     .slice(0, 9);
 }
 
+export const summaryTestUtils = {
+  buildFallback,
+  parseAvoidanceEffect,
+};
+
 export async function POST(request: NextRequest) {
   let payload: SummaryPayload;
   try {
@@ -176,6 +251,7 @@ export async function POST(request: NextRequest) {
 
   const course = parseCourse(payload.course);
   const totalDistanceKm = Number(payload.totalDistanceKm) || 0;
+  const avoidanceEffect = parseAvoidanceEffect(payload.avoidanceEffect);
   const currentLevel =
     payload.currentCongestion &&
     typeof payload.currentCongestion.level === "string"
@@ -204,6 +280,7 @@ export async function POST(request: NextRequest) {
     totalDistanceKm,
     currentLevel,
     bestSlot,
+    avoidanceEffect,
   );
 
   const when = windowText(recommended);
@@ -218,6 +295,9 @@ export async function POST(request: NextRequest) {
     when
       ? `- 추천 방문 날짜(가장 한적한 구간): ${when} (평균 집중률 ${recommended!.avgRate.toFixed(1)})`
       : "- 추천 방문 날짜: 데이터 없음",
+    avoidanceEffect
+      ? `- 수치 근거: 추천 구간 평균 집중률 ${formatPercent(avoidanceEffect.recommendedAvgRate)}, 최고 혼잡일 ${formatPercent(avoidanceEffect.peakRate)} 대비 ${formatPoint(avoidanceEffect.peakAvoidPoint)} 감소, 30일 평균 ${formatPercent(avoidanceEffect.averageRate)} 대비 ${formatPoint(avoidanceEffect.averageAvoidPoint)} 감소${distanceEvidenceText(totalDistanceKm)}`
+      : "- 수치 근거: 데이터 없음(감소폭 숫자는 언급하지 말 것)",
     bestSlot
       ? `- 추천 방문 시간대(예측 최저): ${bestSlot}${bestSlotLevel ? ` (${bestSlotLevel})` : ""}`
       : "- 추천 방문 시간대: (시간대 데이터 없는 지역 — 언급하지 말 것)",
@@ -228,6 +308,7 @@ export async function POST(request: NextRequest) {
     "",
     "요구사항:",
     "- 자연스럽고 친근한 한국어 존댓말, 2~4문장, 180자 내외. 마크다운·불릿·번호기호 없이 문단 텍스트만.",
+    "- 수치 근거가 있으면 최고 혼잡일 대비 감소폭, 30일 평균 대비 감소폭, 추천 구간 평균 집중률, 총 이동거리를 1문장 안에 간결히 녹일 것.",
     "- 반드시 순서대로 녹여낼 것: ① 지금 혼잡함 → ② 추천 방문 날짜(+시간대 데이터가 있으면 시간대까지) →",
     "  ③ 중심에서 시작하는 최소 동선 코스(관광지 2~3곳을 이동 순서와 대략 거리 느낌으로) → ④ 그 시간대 방문 시 제휴 혜택 한 마디.",
     "- 연관 관광지를 '나열'하지 말고 '동선(A에서 걸어서 B로)'으로 서술할 것.",
