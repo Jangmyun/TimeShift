@@ -16,6 +16,7 @@ import type { CongestionDay, RecommendedWindow } from "@/lib/tourapi/congestion"
 import type { RelatedSpot } from "@/lib/tourapi/relatedSpots";
 import type { SpotDetail } from "@/lib/tourapi/detail";
 import { CongestionChart } from "@/components/CongestionChart";
+import { RecommendedDateChips } from "@/components/RecommendedDateChips";
 import {
   SpotMap,
   type CourseReport,
@@ -713,6 +714,10 @@ export default function Home() {
           {congestion.status === "success" && (
             <div className="mt-4">
               <CongestionChart
+                series={congestion.series}
+                recommended={congestion.recommended}
+              />
+              <RecommendedDateChips
                 series={congestion.series}
                 recommended={congestion.recommended}
               />
