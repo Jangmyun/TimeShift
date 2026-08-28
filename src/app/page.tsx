@@ -23,6 +23,7 @@ import {
 } from "@/components/SpotMap";
 import { SpotDetailCard } from "@/components/SpotDetailCard";
 import { RelatedSpotList } from "@/components/RelatedSpotList";
+import { AvoidanceEffectCard } from "@/components/AvoidanceEffectCard";
 import type { CityCongestion } from "@/lib/seoul/cityCongestion";
 
 type FetchState =
@@ -711,6 +712,15 @@ export default function Home() {
               <CongestionChart
                 series={congestion.series}
                 recommended={congestion.recommended}
+              />
+              <AvoidanceEffectCard
+                series={congestion.series}
+                recommended={congestion.recommended}
+                totalDistanceKm={
+                  course.status === "done"
+                    ? course.course?.totalDistanceKm ?? 0
+                    : null
+                }
               />
               {/* 서울 핫스팟 시간대별 혼잡(citydata): 현재 실시간 혼잡도 + 오늘 예측 최저 시간대.
                   집중률(날짜 축)이 "어느 날"을 알려준다면 이건 "몇 시"를 더한다. 미커버 지역은

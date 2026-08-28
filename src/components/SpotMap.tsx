@@ -330,6 +330,9 @@ export function SpotMap({
           zIndex: 100,
         });
         hubInfo.open(map, hubMarker);
+        maps.event.addListener(hubMarker, "click", () => {
+          hubInfo.open(map, hubMarker);
+        });
 
         // 연관 관광지 마커 클릭 시 재사용하는 단일 인포윈도우(동시에 하나만 열리게, X로 닫기).
         const relatedInfo = new maps.InfoWindow({
