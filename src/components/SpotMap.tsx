@@ -20,6 +20,16 @@ export type CourseReport = {
   totalDistanceKm: number;
 };
 
+export type MapCongestionSignal = {
+  level: "여유" | "보통" | "혼잡" | "매우 혼잡";
+  color: string;
+  bg: string;
+  currentRate: number;
+  peakRate: number;
+  recommendedAvg?: number;
+  avoidPoint?: number;
+};
+
 // optimizeCourse 노드에 실을 데이터(이름·카테고리·좌표). 폴리라인/번호 오버레이에 좌표가 필요.
 type StopData = {
   name: string;
@@ -154,9 +164,14 @@ function escapeHtml(s: string) {
 
 const MAX_RELATED_MARKERS = 8;
 
-// 방문 순번 배지 오버레이 HTML(①②③…). 중심=파랑, 연관=회색으로 구분해 마커 위에 띄운다.
-function orderBadge(order: number, isHub: boolean): string {
-  const bg = isHub ? "#256ef4" : "#4b5563";
+// 방문 순번 배지 오버레이 HTML(①②③…). 중심은 혼잡 데이터가 있으면 해당 단계 색으로 표시해
+// 지도만 봐도 "지금 붐비는지"가 읽히게 한다. 연관 관광지는 기존 회색 유지.
+function orderBadge(
+  order: number,
+  isHub: boolean,
+  signal: MapCongestionSignal | null,
+): string {
+  const bg = isHub ? (signal?.color ?? "#256ef4") : "#4b5563";
   return (
     `<div style="transform:translateY(-6px);background:${bg};color:#fff;` +
     `min-width:20px;height:20px;padding:0 5px;border-radius:10px;display:flex;` +
@@ -209,15 +224,23 @@ function kakaoMapLinks(
 function buildHubContent(
   spotName: string,
   recommended: RecommendedWindow | null,
+  signal: MapCongestionSignal | null,
   lat: number,
   lng: number,
 ): string {
   return (
     `<div style="padding:8px 12px;font-size:13px;line-height:1.5;color:#1e2124;width:196px;">` +
     `<strong>${escapeHtml(spotName)}</strong><br/>` +
-    `<span style="color:#256ef4;">중심 관광지</span>` +
+    (signal
+      ? `<span style="display:inline-flex;align-items:center;gap:5px;margin-top:4px;padding:2px 7px;border-radius:999px;color:${signal.color};background:${signal.bg};font-size:12px;font-weight:700;">` +
+        `<span style="display:inline-block;width:7px;height:7px;border-radius:999px;background:${signal.color};"></span>` +
+        `오늘 예측 ${signal.level} · ${signal.currentRate}%</span>`
+      : `<span style="color:#256ef4;">중심 관광지</span>`) +
     (recommended
       ? `<br/>추천 방문 ${formatMd(recommended.startYmd)}~${formatMd(recommended.endYmd)}`
+      : "") +
+    (signal?.avoidPoint
+      ? `<br/><span style="color:#6d7882;">최고 혼잡일 대비 ${signal.avoidPoint}p 낮은 구간</span>`
       : "") +
     kakaoMapLinks(spotName, lat, lng) +
     `</div>`
@@ -228,11 +251,13 @@ export function SpotMap({
   spot,
   related,
   recommended,
+  congestionSignal,
   onCourse,
 }: {
   spot: HubSpot;
   related: RelatedSpot[];
   recommended: RecommendedWindow | null;
+  congestionSignal?: MapCongestionSignal | null;
   onCourse?: (course: CourseReport | null) => void;
 }) {
   const appKey = process.env.NEXT_PUBLIC_KAKAO_MAP_APP_KEY;
@@ -294,7 +319,13 @@ export function SpotMap({
         // zIndex는 번호배지 CustomOverlay(zIndex:5)보다 높게 둬, 열린 인포윈도우가 항상 배지 위에
         // 올라오도록 한다(그렇지 않으면 배지가 박스의 글자·버튼을 가린다).
         const hubInfo = new maps.InfoWindow({
-          content: buildHubContent(spot.hubTatsNm, recommended, lat, lng),
+          content: buildHubContent(
+            spot.hubTatsNm,
+            recommended,
+            congestionSignal ?? null,
+            lat,
+            lng,
+          ),
           removable: true, // X 버튼으로 닫기.
           zIndex: 100,
         });
@@ -341,7 +372,11 @@ export function SpotMap({
           course.stops.forEach((s) => {
             const ov = new maps.CustomOverlay({
               position: new maps.LatLng(s.data.lat, s.data.lng),
-              content: orderBadge(s.order, s.data.isHub),
+              content: orderBadge(
+                s.order,
+                s.data.isHub,
+                congestionSignal ?? null,
+              ),
               yAnchor: 2.4,
               xAnchor: 0.5,
               zIndex: 5,
@@ -436,7 +471,7 @@ export function SpotMap({
       overlays.forEach((o) => o.setMap(null));
       polyline?.setMap(null);
     };
-  }, [appKey, spot, related, recommended]);
+  }, [appKey, spot, related, recommended, congestionSignal]);
 
   // 키 미설정 등으로 지도를 못 그릴 때의 폴백(계획문서 F7: "지도 준비중" degrade).
   if (!appKey || status === "error") {
@@ -461,6 +496,31 @@ export function SpotMap({
         className="kakao-map-root h-[360px] w-full rounded-[10px]"
         style={{ border: "1px solid #cdd1d5" /* --krds-color-light-gray-20 */ }}
       />
+      {congestionSignal && (
+        <div
+          className="pointer-events-none absolute right-[12px] top-[12px] rounded-[10px] px-[12px] py-[10px] text-[13px] shadow-sm"
+          style={{
+            backgroundColor: "rgba(255,255,255,.94)",
+            border: "1px solid #e6e8ea",
+            color: "#1e2124",
+          }}
+        >
+          <div className="flex items-center gap-[7px] font-semibold">
+            <span
+              className="h-[9px] w-[9px] rounded-full"
+              style={{ backgroundColor: congestionSignal.color }}
+              aria-hidden="true"
+            />
+            오늘 예측 {congestionSignal.level}
+          </div>
+          <div className="mt-[2px]" style={{ color: "#6d7882" }}>
+            집중률 {congestionSignal.currentRate}%
+            {congestionSignal.avoidPoint
+              ? ` · 추천 구간 ${congestionSignal.avoidPoint}p↓`
+              : ""}
+          </div>
+        </div>
+      )}
       {status === "loading" && (
         <div
           className="absolute inset-0 flex items-center justify-center rounded-[10px] text-[14px]"

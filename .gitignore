@@ -43,3 +43,8 @@ next-env.d.ts
 
 # scratch/planning
 /tmp/
+
+# local project guidance/docs
+AGENTS.md
+CLAUDE.md
+PRD_TimeShift.md

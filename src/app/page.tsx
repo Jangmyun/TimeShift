@@ -16,7 +16,11 @@ import type { CongestionDay, RecommendedWindow } from "@/lib/tourapi/congestion"
 import type { RelatedSpot } from "@/lib/tourapi/relatedSpots";
 import type { SpotDetail } from "@/lib/tourapi/detail";
 import { CongestionChart } from "@/components/CongestionChart";
-import { SpotMap, type CourseReport } from "@/components/SpotMap";
+import {
+  SpotMap,
+  type CourseReport,
+  type MapCongestionSignal,
+} from "@/components/SpotMap";
 import { SpotDetailCard } from "@/components/SpotDetailCard";
 import { RelatedSpotList } from "@/components/RelatedSpotList";
 import type { CityCongestion } from "@/lib/seoul/cityCongestion";
@@ -103,6 +107,47 @@ function formatSlot(time: string): string {
   return `${ampm} ${h12}시경`;
 }
 
+function mapCongestionLevel(rate: number): Pick<
+  MapCongestionSignal,
+  "level" | "color" | "bg"
+> {
+  if (rate >= 70) {
+    return { level: "매우 혼잡", color: "#d1293d", bg: "#fdecee" };
+  }
+  if (rate >= 50) {
+    return { level: "혼잡", color: "#b54708", bg: "#fdf0e6" };
+  }
+  if (rate >= 30) {
+    return { level: "보통", color: "#256ef4", bg: "#ecf2fe" };
+  }
+  return { level: "여유", color: "#1a7f37", bg: "#e7f5ec" };
+}
+
+function buildMapCongestionSignal(
+  series: CongestionDay[],
+  recommended: RecommendedWindow | null,
+): MapCongestionSignal | null {
+  if (series.length === 0) return null;
+  const currentRate = Math.round(series[0].cnctrRate * 10) / 10;
+  const peakRate = Math.round(
+    Math.max(...series.map((d) => d.cnctrRate)) * 10,
+  ) / 10;
+  const recommendedAvg =
+    recommended === null ? undefined : Math.round(recommended.avgRate * 10) / 10;
+  const avoidPoint =
+    recommendedAvg === undefined
+      ? undefined
+      : Math.max(0, Math.round((peakRate - recommendedAvg) * 10) / 10);
+
+  return {
+    ...mapCongestionLevel(currentRate),
+    currentRate,
+    peakRate,
+    recommendedAvg,
+    avoidPoint,
+  };
+}
+
 export default function Home() {
   const [areaCd, setAreaCd] = useState<string>("");
   const [signguCd, setSignguCd] = useState<string>("");
@@ -128,6 +173,14 @@ export default function Home() {
   // 도착해 엉뚱한 화면을 덮어쓸 수 있어(stale response), 각 비동기 응답이 자기 seq가 여전히
   // 최신일 때만 상태를 반영하도록 가드한다.
   const navSeqRef = useRef(0);
+
+  const mapCongestionSignal = useMemo(
+    () =>
+      congestion.status === "success"
+        ? buildMapCongestionSignal(congestion.series, congestion.recommended)
+        : null,
+    [congestion],
+  );
 
   const sigunguOptions = useMemo(
     () => REGIONS.find((r) => r.areaCd === areaCd)?.sigungu ?? [],
@@ -849,8 +902,8 @@ export default function Home() {
               style={{ color: "#6d7882" }}
             >
               {related.status === "success" && related.items.length > 0
-                ? "지도 중앙의 정보창이 열린 마커가 선택한 중심 관광지, 나머지는 주변 연관 관광지입니다. 마커를 누르면 상세 정보가 열립니다."
-                : "지도 중앙의 정보창이 열린 마커가 선택한 중심 관광지입니다. 마커를 누르면 상세 정보가 열립니다."}
+                ? "색상 번호 배지는 선택 관광지의 오늘 예측 혼잡 단계, 회색 번호 배지는 주변 연관 관광지입니다. 마커를 누르면 상세 정보가 열립니다."
+                : "색상 번호 배지는 선택 관광지의 오늘 예측 혼잡 단계입니다. 마커를 누르면 상세 정보가 열립니다."}
             </p>
             <SpotMap
               spot={selectedSpot}
@@ -860,6 +913,7 @@ export default function Home() {
               recommended={
                 congestion.status === "success" ? congestion.recommended : null
               }
+              congestionSignal={mapCongestionSignal}
               onCourse={(c) => setCourse({ status: "done", course: c })}
             />
           </div>
