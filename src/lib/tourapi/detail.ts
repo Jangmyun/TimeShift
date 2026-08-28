@@ -18,6 +18,11 @@ export type SpotDetail = {
   overview: string | null;
 };
 
+export type RelatedSpotDetailContext = {
+  areaNm: string;
+  signguNm: string;
+};
+
 const ENDPOINT = process.env.TOURAPI_DETAIL_ENDPOINT ?? "";
 const SERVICE_KEY = process.env.TOURAPI_DETAIL_KEY_DECODED ?? "";
 
@@ -82,6 +87,52 @@ function pickBest(
   }
   if (!best) return pool[0]; // 후보에 좌표가 전혀 없으면 최상위로.
   return bestDist <= MAX_MATCH_KM ? best : null;
+}
+
+function regionAliases(areaNm: string): string[] {
+  const trimmed = areaNm.trim();
+  const short = trimmed.replace(
+    /(특별자치도|특별자치시|특별시|광역시|자치도|도)$/u,
+    "",
+  );
+  return Array.from(new Set([trimmed, short].filter(Boolean)));
+}
+
+function sigunguAliases(signguNm: string): string[] {
+  const trimmed = signguNm.trim();
+  const lastToken = trimmed.split(/\s+/).at(-1) ?? "";
+  return Array.from(new Set([trimmed, lastToken].filter(Boolean)));
+}
+
+function matchesRegion(
+  addr: string | undefined,
+  { areaNm, signguNm }: RelatedSpotDetailContext,
+): boolean {
+  if (!addr) return false;
+  const normalizedAddr = normalize(addr);
+  const hasArea = regionAliases(areaNm).some((alias) =>
+    normalizedAddr.includes(normalize(alias)),
+  );
+  const hasSigungu = sigunguAliases(signguNm).some((alias) =>
+    normalizedAddr.includes(normalize(alias)),
+  );
+  return hasArea && hasSigungu;
+}
+
+/**
+ * 연관 관광지는 좌표가 없으므로 중심 관광지처럼 거리 기반 disambiguation을 할 수 없다.
+ * 대신 이름 정확 일치를 우선하되, 주소가 같은 시/군/구로 확인되는 후보만 채택한다. 지역 확인이
+ * 안 되면 다른 지역 동명 장소를 보여줄 위험이 있으므로 null로 보강을 생략한다.
+ */
+function pickRelatedBest(
+  candidates: SearchItem[],
+  spotName: string,
+  context: RelatedSpotDetailContext,
+): SearchItem | null {
+  const target = normalize(spotName);
+  const exact = candidates.filter((c) => normalize(c.title) === target);
+  const pool = exact.length > 0 ? exact : candidates;
+  return pool.find((c) => matchesRegion(c.addr1, context)) ?? null;
 }
 
 /**
@@ -169,6 +220,53 @@ export async function fetchSpotDetail(
     };
   } catch {
     // 순수 보강 기능 → 실패는 조용히 생략(코어 플로우 무영향).
+    return null;
+  }
+}
+
+export async function fetchRelatedSpotDetail(
+  spotName: string,
+  context: RelatedSpotDetailContext,
+): Promise<SpotDetail | null> {
+  try {
+    let candidates: SearchItem[] = [];
+    for (const kw of keywordVariants(spotName)) {
+      candidates = await callTourApi<SearchItem>(
+        ENDPOINT,
+        SERVICE_KEY,
+        "searchKeyword2",
+        { keyword: kw, numOfRows: 10, pageNo: 1, arrange: "A" },
+      );
+      if (candidates.length > 0) break;
+    }
+    if (candidates.length === 0) return null;
+
+    const best = pickRelatedBest(candidates, spotName, context);
+    if (!best) return null;
+
+    let common: CommonItem | undefined;
+    try {
+      const rows = await callTourApi<CommonItem>(
+        ENDPOINT,
+        SERVICE_KEY,
+        "detailCommon2",
+        { contentId: best.contentid },
+      );
+      common = rows[0];
+    } catch {
+      // 상세 조회 실패 시에도 검색 결과(이미지/주소)만으로 최소 보강.
+    }
+
+    return {
+      contentId: best.contentid,
+      title: common?.title || best.title,
+      image: safeImage(best.firstimage || common?.firstimage),
+      address: common?.addr1 || best.addr1 || null,
+      homepage: cleanHomepage(common?.homepage),
+      overview: common?.overview || null,
+    };
+  } catch {
+    // 연관 카드 보강도 순수 보강 기능 → 실패는 조용히 생략.
     return null;
   }
 }

@@ -1,7 +1,9 @@
 "use client";
 
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
+import Image from "next/image";
 import { Button, Badge } from "krds-react";
+import type { SpotDetail } from "@/lib/tourapi/detail";
 import type { RelatedSpot } from "@/lib/tourapi/relatedSpots";
 
 const KRDS_BORDER_DEFAULT = "#cdd1d5"; // --krds-color-light-gray-20
@@ -21,6 +23,10 @@ export function RelatedSpotList({
   keywords: string[];
   onClearKeywords: () => void;
 }) {
+  const [detailState, setDetailState] = useState<{
+    targetKey: string;
+    values: Record<string, SpotDetail>;
+  }>({ targetKey: "", values: {} });
   const categories = useMemo(
     () => Array.from(new Set(items.map((i) => i.rlteCtgryLclsNm))),
     [items],
@@ -41,6 +47,52 @@ export function RelatedSpotList({
     }
     return list;
   }, [items, categoryFilter, keywords]);
+  const detailTargets = useMemo(() => items.slice(0, 3), [items]);
+  const detailTargetKey = useMemo(
+    () => detailTargets.map((spot) => spot.rlteTatsCd).join("|"),
+    [detailTargets],
+  );
+  const details =
+    detailState.targetKey === detailTargetKey ? detailState.values : {};
+
+  useEffect(() => {
+    if (detailTargets.length === 0) {
+      return;
+    }
+
+    const controller = new AbortController();
+
+    void (async () => {
+      const entries = await Promise.all(
+        detailTargets.map(async (spot) => {
+          try {
+            const params = new URLSearchParams({
+              spotName: spot.rlteTatsNm,
+              areaCd: spot.rlteRegnCd,
+              signguCd: spot.rlteSignguCd,
+            });
+            const res = await fetch(`/api/related-spot-detail?${params}`, {
+              signal: controller.signal,
+            });
+            if (!res.ok) return null;
+            const data = (await res.json()) as { detail?: SpotDetail | null };
+            return data.detail
+              ? ([spot.rlteTatsCd, data.detail] as const)
+              : null;
+          } catch {
+            return null;
+          }
+        }),
+      );
+      if (controller.signal.aborted) return;
+      setDetailState({
+        targetKey: detailTargetKey,
+        values: Object.fromEntries(entries.filter((entry) => entry !== null)),
+      });
+    })();
+
+    return () => controller.abort();
+  }, [detailTargetKey, detailTargets]);
 
   return (
     <div className="mt-4">
@@ -78,26 +130,49 @@ export function RelatedSpotList({
       </div>
 
       <ul className="mt-4 grid grid-cols-1 gap-[12px] sm:grid-cols-2">
-        {filtered.map((spot) => (
-          <li
-            key={spot.rlteTatsCd}
-            className="rounded-lg border p-[16px]"
-            style={{ borderColor: KRDS_BORDER_DEFAULT }}
-          >
-            <div className="flex items-center justify-between">
-              <Badge variant="filled" color="secondary" size="small" rounded>
-                연관 {spot.rlteRank}위
-              </Badge>
-              <Badge variant="outline" color="gray" size="small">
-                {spot.rlteCtgryLclsNm} · {spot.rlteCtgryMclsNm}
-              </Badge>
-            </div>
-            <h3 className="mt-2 font-semibold">{spot.rlteTatsNm}</h3>
-            <p className="text-[14px] text-gray-500">
-              {spot.rlteRegnNm} {spot.rlteSignguNm}
-            </p>
-          </li>
-        ))}
+        {filtered.map((spot) => {
+          const detail = details[spot.rlteTatsCd];
+          return (
+            <li
+              key={spot.rlteTatsCd}
+              className="rounded-lg border p-[16px]"
+              style={{ borderColor: KRDS_BORDER_DEFAULT }}
+            >
+              <div className="flex gap-[12px]">
+                {detail?.image && (
+                  <Image
+                    src={detail.image}
+                    alt={detail.title}
+                    width={96}
+                    height={72}
+                    sizes="96px"
+                    className="h-[72px] w-[96px] shrink-0 rounded-[8px] object-cover"
+                    style={{ border: `1px solid ${KRDS_BORDER_DEFAULT}` }}
+                  />
+                )}
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center justify-between gap-[6px]">
+                    <Badge variant="filled" color="secondary" size="small" rounded>
+                      연관 {spot.rlteRank}위
+                    </Badge>
+                    <Badge variant="outline" color="gray" size="small">
+                      {spot.rlteCtgryLclsNm} · {spot.rlteCtgryMclsNm}
+                    </Badge>
+                  </div>
+                  <h3 className="mt-2 font-semibold">{spot.rlteTatsNm}</h3>
+                  <p className="text-[14px] text-gray-500">
+                    {detail?.address ?? `${spot.rlteRegnNm} ${spot.rlteSignguNm}`}
+                  </p>
+                  {detail?.overview && (
+                    <p className="mt-[8px] line-clamp-2 text-[14px] leading-relaxed text-gray-700">
+                      {detail.overview}
+                    </p>
+                  )}
+                </div>
+              </div>
+            </li>
+          );
+        })}
       </ul>
     </div>
   );
