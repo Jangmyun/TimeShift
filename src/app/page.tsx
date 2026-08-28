@@ -29,32 +29,40 @@ import {
   calculateAvoidanceEffect,
 } from "@/components/AvoidanceEffectCard";
 import { DataSourcePanel } from "@/components/DataSourcePanel";
+import { FallbackUsageNotice } from "@/components/FallbackUsageNotice";
 import type { CityCongestion } from "@/lib/seoul/cityCongestion";
+import type { FetchSource } from "@/lib/tourapi/fallback";
 
 type FetchState =
   | { status: "idle" }
   | { status: "loading" }
   | { status: "error"; message: string }
-  | { status: "empty" }
-  | { status: "success"; items: HubSpot[]; baseYm: string };
+  | { status: "empty"; source: FetchSource }
+  | {
+      status: "success";
+      items: HubSpot[];
+      baseYm: string;
+      source: FetchSource;
+    };
 
 type CongestionState =
   | { status: "idle" }
   | { status: "loading" }
   | { status: "error"; message: string }
-  | { status: "empty" }
+  | { status: "empty"; source: FetchSource }
   | {
       status: "success";
       series: CongestionDay[];
       recommended: RecommendedWindow | null;
+      source: FetchSource;
     };
 
 type RelatedState =
   | { status: "idle" }
   | { status: "loading" }
   | { status: "error"; message: string }
-  | { status: "empty" }
-  | { status: "success"; items: RelatedSpot[] };
+  | { status: "empty"; source: FetchSource }
+  | { status: "success"; items: RelatedSpot[]; source: FetchSource };
 
 type SummaryState =
   | { status: "idle" }
@@ -77,7 +85,7 @@ type CourseState =
 // 서울 핫스팟 시간대별 혼잡(citydata). 미커버 지역은 hourly=null(날짜 축만).
 type CityCongState =
   | { status: "idle" }
-  | { status: "done"; hourly: CityCongestion | null };
+  | { status: "done"; hourly: CityCongestion | null; source: FetchSource };
 
 // krds-react design tokens (.claude/skills/krds-design/references/design-tokens.md).
 // Card containers have no krds-react component equivalent, so their border/background
@@ -154,6 +162,10 @@ function buildMapCongestionSignal(
   };
 }
 
+function normalizeFetchSource(source: unknown): FetchSource {
+  return source === "fallback" ? "fallback" : "live";
+}
+
 export default function Home() {
   const [areaCd, setAreaCd] = useState<string>("");
   const [signguCd, setSignguCd] = useState<string>("");
@@ -196,6 +208,33 @@ export default function Home() {
     [congestion],
   );
 
+  const demoFallbackSources = useMemo(
+    () => [
+      {
+        label: "중심 관광지",
+        source:
+          state.status === "success" || state.status === "empty"
+            ? state.source
+            : null,
+      },
+      {
+        label: "혼잡 예측",
+        source:
+          congestion.status === "success" || congestion.status === "empty"
+            ? congestion.source
+            : null,
+      },
+      {
+        label: "연관 관광지",
+        source:
+          related.status === "success" || related.status === "empty"
+            ? related.source
+            : null,
+      },
+    ],
+    [state, congestion, related],
+  );
+
   const sigunguOptions = useMemo(
     () => REGIONS.find((r) => r.areaCd === areaCd)?.sigungu ?? [],
     [areaCd],
@@ -218,10 +257,15 @@ export default function Home() {
         return;
       }
       if (!data.baseYm || data.items.length === 0) {
-        setState({ status: "empty" });
+        setState({ status: "empty", source: normalizeFetchSource(data.source) });
         return;
       }
-      setState({ status: "success", items: data.items, baseYm: data.baseYm });
+      setState({
+        status: "success",
+        items: data.items,
+        baseYm: data.baseYm,
+        source: normalizeFetchSource(data.source),
+      });
     } catch {
       if (seq !== navSeqRef.current) return;
       setState({ status: "error", message: "네트워크 오류가 발생했습니다." });
@@ -250,10 +294,14 @@ export default function Home() {
         );
         const data = await res.json();
         if (seq !== navSeqRef.current) return;
-        setCityCong({ status: "done", hourly: res.ok ? data.hourly : null });
+        setCityCong({
+          status: "done",
+          hourly: res.ok ? data.hourly : null,
+          source: res.ok ? normalizeFetchSource(data.source) : "live",
+        });
       } catch {
         if (seq !== navSeqRef.current) return;
-        setCityCong({ status: "done", hourly: null });
+        setCityCong({ status: "done", hourly: null, source: "live" });
       }
     })();
 
@@ -284,13 +332,17 @@ export default function Home() {
           return;
         }
         if (data.series.length === 0) {
-          setCongestion({ status: "empty" });
+          setCongestion({
+            status: "empty",
+            source: normalizeFetchSource(data.source),
+          });
           return;
         }
         setCongestion({
           status: "success",
           series: data.series,
           recommended: data.recommended,
+          source: normalizeFetchSource(data.source),
         });
       } catch {
         if (seq !== navSeqRef.current) return;
@@ -313,10 +365,14 @@ export default function Home() {
           return;
         }
         if (data.items.length === 0) {
-          setRelated({ status: "empty" });
+          setRelated({ status: "empty", source: normalizeFetchSource(data.source) });
           return;
         }
-        setRelated({ status: "success", items: data.items });
+        setRelated({
+          status: "success",
+          items: data.items,
+          source: normalizeFetchSource(data.source),
+        });
       } catch {
         if (seq !== navSeqRef.current) return;
         setRelated({
@@ -470,6 +526,7 @@ export default function Home() {
       </section>
 
       <DataSourcePanel />
+      <FallbackUsageNotice sources={demoFallbackSources} />
 
       {/* 지역 선택 필터 패널 (흰색 카드). */}
       <section
