@@ -2,9 +2,13 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { HubSpot } from "@/lib/tourapi/hubSpots";
-import type { RecommendedWindow } from "@/lib/tourapi/congestion";
+import type { CongestionDay, RecommendedWindow } from "@/lib/tourapi/congestion";
 import type { RelatedSpot } from "@/lib/tourapi/relatedSpots";
 import { optimizeCourse } from "@/lib/route/graph";
+import {
+  buildMapCongestionSignal,
+  type MapCongestionSignal,
+} from "@/lib/congestionSignal";
 
 // 최적 동선 결과를 상위(page)로 올려 LLM 코스 서사에 쓰게 한다. 좌표는 브라우저 지오코딩으로만
 // 확보되므로(연관 관광지에 좌표 필드 없음) 계산·리포팅을 SpotMap이 단일 지점으로 담당한다.
@@ -18,16 +22,6 @@ export type CourseStopReport = {
 export type CourseReport = {
   stops: CourseStopReport[];
   totalDistanceKm: number;
-};
-
-export type MapCongestionSignal = {
-  level: "여유" | "보통" | "혼잡" | "매우 혼잡";
-  color: string;
-  bg: string;
-  currentRate: number;
-  peakRate: number;
-  recommendedAvg?: number;
-  avoidPoint?: number;
 };
 
 // optimizeCourse 노드에 실을 데이터(이름·카테고리·좌표). 폴리라인/번호 오버레이에 좌표가 필요.
@@ -46,7 +40,12 @@ type StopData = {
 
 // 카카오 지도 API 타입 최소 선언(공식 @types 미설치). 사용하는 서브셋만 정의해 any를 피한다.
 type KakaoLatLng = { getLat(): number; getLng(): number };
-type KakaoMarker = { setMap(map: KakaoMap | null): void };
+type KakaoMarkerImage = unknown;
+type KakaoSize = unknown;
+type KakaoMarker = {
+  setMap(map: KakaoMap | null): void;
+  setImage?(image: KakaoMarkerImage): void;
+};
 type KakaoInfoWindow = {
   open(map: KakaoMap, marker?: KakaoMarker): void;
   close(): void;
@@ -82,7 +81,14 @@ type KakaoMaps = {
     position: KakaoLatLng;
     map?: KakaoMap;
     title?: string;
+    image?: KakaoMarkerImage;
   }) => KakaoMarker;
+  MarkerImage: new (
+    src: string,
+    size: KakaoSize,
+    options?: { offset?: KakaoLatLng },
+  ) => KakaoMarkerImage;
+  Size: new (width: number, height: number) => KakaoSize;
   InfoWindow: new (options: {
     content: string;
     removable?: boolean;
@@ -163,6 +169,7 @@ function escapeHtml(s: string) {
 }
 
 const MAX_RELATED_MARKERS = 8;
+const RELATED_MARKER_GRAY = "#6d7882";
 
 // 방문 순번 배지 오버레이 HTML(①②③…). 중심은 혼잡 데이터가 있으면 해당 단계 색으로 표시해
 // 지도만 봐도 "지금 붐비는지"가 읽히게 한다. 연관 관광지는 기존 회색 유지.
@@ -177,6 +184,19 @@ function orderBadge(
     `min-width:20px;height:20px;padding:0 5px;border-radius:10px;display:flex;` +
     `align-items:center;justify-content:center;font-size:12px;font-weight:700;` +
     `border:2px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,.35);">${order}</div>`
+  );
+}
+
+function markerImage(maps: KakaoMaps, signal: MapCongestionSignal | null) {
+  const fill = signal?.color ?? RELATED_MARKER_GRAY;
+  const label = signal ? `오늘 예측 ${signal.level}` : "혼잡도 미매칭";
+  const svg =
+    `<svg xmlns="http://www.w3.org/2000/svg" width="28" height="38" viewBox="0 0 28 38" role="img" aria-label="${escapeHtml(label)}">` +
+    `<path d="M14 37s11-11.2 11-23A11 11 0 1 0 3 14c0 11.8 11 23 11 23Z" fill="${fill}" stroke="#fff" stroke-width="2"/>` +
+    `<circle cx="14" cy="14" r="4.5" fill="#fff"/></svg>`;
+  return new maps.MarkerImage(
+    `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`,
+    new maps.Size(28, 38),
   );
 }
 
@@ -247,6 +267,47 @@ function buildHubContent(
   );
 }
 
+function buildRelatedContent(
+  related: RelatedSpot,
+  signal: MapCongestionSignal | null,
+  lat: number,
+  lng: number,
+  placeUrl?: string,
+): string {
+  return (
+    `<div style="padding:8px 12px;font-size:13px;line-height:1.5;color:#1e2124;width:196px;">` +
+    `<strong>${escapeHtml(related.rlteTatsNm)}</strong><br/>` +
+    `<span style="color:#6d7882;">${escapeHtml(related.rlteCtgryLclsNm)} · ${escapeHtml(related.rlteCtgryMclsNm)}</span>` +
+    (signal
+      ? `<br/><span style="display:inline-flex;align-items:center;gap:5px;margin-top:4px;padding:2px 7px;border-radius:999px;color:${signal.color};background:${signal.bg};font-size:12px;font-weight:700;">` +
+        `<span style="display:inline-block;width:7px;height:7px;border-radius:999px;background:${signal.color};"></span>` +
+        `오늘 예측 ${signal.level} · ${signal.currentRate}%</span>`
+      : `<br/><span style="color:#6d7882;">혼잡도 미매칭</span>`) +
+    kakaoMapLinks(related.rlteTatsNm, lat, lng, placeUrl) +
+    `</div>`
+  );
+}
+
+type CongestionResponse = {
+  series?: CongestionDay[];
+  recommended?: RecommendedWindow | null;
+};
+
+async function fetchRelatedCongestionSignal(
+  related: RelatedSpot,
+  signal?: AbortSignal,
+): Promise<MapCongestionSignal | null> {
+  const params = new URLSearchParams({
+    areaCd: related.rlteRegnCd,
+    signguCd: related.rlteSignguCd,
+    spotName: related.rlteTatsNm,
+  });
+  const res = await fetch(`/api/congestion?${params.toString()}`, { signal });
+  if (!res.ok) return null;
+  const data = (await res.json()) as CongestionResponse;
+  return buildMapCongestionSignal(data.series ?? [], data.recommended ?? null);
+}
+
 export function SpotMap({
   spot,
   related,
@@ -287,6 +348,7 @@ export function SpotMap({
     const overlays: KakaoCustomOverlay[] = [];
     const geocoded: { data: StopData; coord: { lng: number; lat: number } }[] =
       [];
+    const signalAbort = new AbortController();
     let polyline: KakaoPolyline | null = null;
     // 관광지 전환 시 로딩 표시로 되돌린다.
     setStatus("loading");
@@ -423,13 +485,19 @@ export function SpotMap({
                     Number(data[0].y),
                     Number(data[0].x),
                   );
-                  const marker = new maps.Marker({ position: pos, map });
+                  const marker = new maps.Marker({
+                    position: pos,
+                    map,
+                    title: r.rlteTatsNm,
+                    image: markerImage(maps, null),
+                  });
                   markers.push(marker);
                   bounds.extend(pos);
                   extended += 1;
                   const rLat = Number(data[0].y);
                   const rLng = Number(data[0].x);
                   const rPlaceUrl = data[0].place_url;
+                  let relatedSignal: MapCongestionSignal | null = null;
                   geocoded.push({
                     data: {
                       name: r.rlteTatsNm,
@@ -442,14 +510,25 @@ export function SpotMap({
                   });
                   maps.event.addListener(marker, "click", () => {
                     relatedInfo.setContent(
-                      `<div style="padding:8px 12px;font-size:13px;line-height:1.5;color:#1e2124;width:196px;">` +
-                        `<strong>${escapeHtml(r.rlteTatsNm)}</strong><br/>` +
-                        `<span style="color:#6d7882;">${escapeHtml(r.rlteCtgryLclsNm)} · ${escapeHtml(r.rlteCtgryMclsNm)}</span>` +
-                        kakaoMapLinks(r.rlteTatsNm, rLat, rLng, rPlaceUrl) +
-                        `</div>`,
+                      buildRelatedContent(
+                        r,
+                        relatedSignal,
+                        rLat,
+                        rLng,
+                        rPlaceUrl,
+                      ),
                     );
                     relatedInfo.open(map, marker);
                   });
+                  fetchRelatedCongestionSignal(r, signalAbort.signal)
+                    .then((signal) => {
+                      if (cancelled || !signal) return;
+                      relatedSignal = signal;
+                      marker.setImage?.(markerImage(maps, signal));
+                    })
+                    .catch(() => {
+                      // 부가 혼잡 레이어는 실패해도 회색 마커로 유지한다.
+                    });
                 }
                 pending -= 1;
                 if (pending === 0) {
@@ -470,6 +549,7 @@ export function SpotMap({
 
     return () => {
       cancelled = true;
+      signalAbort.abort();
       markers.forEach((m) => m.setMap(null));
       overlays.forEach((o) => o.setMap(null));
       polyline?.setMap(null);

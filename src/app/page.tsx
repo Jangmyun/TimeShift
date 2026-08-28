@@ -15,13 +15,10 @@ import type { HubSpot } from "@/lib/tourapi/hubSpots";
 import type { CongestionDay, RecommendedWindow } from "@/lib/tourapi/congestion";
 import type { RelatedSpot } from "@/lib/tourapi/relatedSpots";
 import type { SpotDetail } from "@/lib/tourapi/detail";
+import { buildMapCongestionSignal } from "@/lib/congestionSignal";
 import { CongestionChart } from "@/components/CongestionChart";
 import { RecommendedDateChips } from "@/components/RecommendedDateChips";
-import {
-  SpotMap,
-  type CourseReport,
-  type MapCongestionSignal,
-} from "@/components/SpotMap";
+import { SpotMap, type CourseReport } from "@/components/SpotMap";
 import { SpotDetailCard } from "@/components/SpotDetailCard";
 import { RelatedSpotList } from "@/components/RelatedSpotList";
 import {
@@ -119,47 +116,6 @@ function formatSlot(time: string): string {
   const ampm = h < 12 ? "오전" : "오후";
   const h12 = h % 12 === 0 ? 12 : h % 12;
   return `${ampm} ${h12}시경`;
-}
-
-function mapCongestionLevel(rate: number): Pick<
-  MapCongestionSignal,
-  "level" | "color" | "bg"
-> {
-  if (rate >= 70) {
-    return { level: "매우 혼잡", color: "#d1293d", bg: "#fdecee" };
-  }
-  if (rate >= 50) {
-    return { level: "혼잡", color: "#b54708", bg: "#fdf0e6" };
-  }
-  if (rate >= 30) {
-    return { level: "보통", color: "#256ef4", bg: "#ecf2fe" };
-  }
-  return { level: "여유", color: "#1a7f37", bg: "#e7f5ec" };
-}
-
-function buildMapCongestionSignal(
-  series: CongestionDay[],
-  recommended: RecommendedWindow | null,
-): MapCongestionSignal | null {
-  if (series.length === 0) return null;
-  const currentRate = Math.round(series[0].cnctrRate * 10) / 10;
-  const peakRate = Math.round(
-    Math.max(...series.map((d) => d.cnctrRate)) * 10,
-  ) / 10;
-  const recommendedAvg =
-    recommended === null ? undefined : Math.round(recommended.avgRate * 10) / 10;
-  const avoidPoint =
-    recommendedAvg === undefined
-      ? undefined
-      : Math.max(0, Math.round((peakRate - recommendedAvg) * 10) / 10);
-
-  return {
-    ...mapCongestionLevel(currentRate),
-    currentRate,
-    peakRate,
-    recommendedAvg,
-    avoidPoint,
-  };
 }
 
 function normalizeFetchSource(source: unknown): FetchSource {
@@ -994,7 +950,7 @@ export default function Home() {
               style={{ color: "#6d7882" }}
             >
               {related.status === "success" && related.items.length > 0
-                ? "색상 번호 배지는 선택 관광지의 오늘 예측 혼잡 단계, 회색 번호 배지는 주변 연관 관광지입니다. 마커를 누르면 상세 정보가 열립니다."
+                ? "색상 마커는 오늘 예측 혼잡 단계입니다. 안전하게 매칭되지 않은 주변 관광지는 회색으로 표시됩니다."
                 : "색상 번호 배지는 선택 관광지의 오늘 예측 혼잡 단계입니다. 마커를 누르면 상세 정보가 열립니다."}
             </p>
             <SpotMap
