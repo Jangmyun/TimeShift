@@ -481,7 +481,8 @@ export default function Home() {
           선택
         </h2>
         <p className="mt-[4px] text-[14px]" style={{ color: "#6d7882" }}>
-          시/도와 시/군/구를 선택하면 해당 지역의 중심 관광지를 불러옵니다.
+          시/도와 시/군/구를 선택하면 해당 지역의 중심 관광지를 불러옵니다. 현재
+          관광공사 제공 데이터 기준으로 일부 지역은 준비 중일 수 있어요.
         </p>
         <div className="mt-[16px] flex w-full flex-col gap-[16px] sm:flex-row">
           <div className="flex-1">
@@ -567,7 +568,8 @@ export default function Home() {
             alerts={[
               {
                 variant: "info",
-                message: "이 지역은 아직 데이터가 준비중입니다. 다른 지역을 선택해 주세요.",
+                message:
+                  "현재 관광공사 제공 데이터 기준으로 이 지역은 준비 중입니다. 다른 지역을 선택해 보세요.",
               },
             ]}
           />
@@ -718,7 +720,8 @@ export default function Home() {
                 alerts={[
                   {
                     variant: "info",
-                    message: "이 관광지는 아직 집중률 데이터가 준비중입니다.",
+                    message:
+                      "현재 관광공사 제공 데이터 기준으로 이 관광지의 집중률 예측은 준비 중입니다.",
                   },
                 ]}
               />
@@ -893,7 +896,8 @@ export default function Home() {
                 alerts={[
                   {
                     variant: "info",
-                    message: "아직 연관 관광지 데이터가 준비중입니다.",
+                    message:
+                      "현재 관광공사 제공 데이터 기준으로 주변 연관 관광지는 준비 중입니다.",
                   },
                 ]}
               />
