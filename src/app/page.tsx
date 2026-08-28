@@ -24,6 +24,7 @@ import {
 import { SpotDetailCard } from "@/components/SpotDetailCard";
 import { RelatedSpotList } from "@/components/RelatedSpotList";
 import { AvoidanceEffectCard } from "@/components/AvoidanceEffectCard";
+import { DataSourcePanel } from "@/components/DataSourcePanel";
 import type { CityCongestion } from "@/lib/seoul/cityCongestion";
 
 type FetchState =
@@ -453,6 +454,8 @@ export default function Home() {
           집중률 예측으로 알려드립니다.
         </p>
       </section>
+
+      <DataSourcePanel />
 
       {/* 지역 선택 필터 패널 (흰색 카드). */}
       <section
